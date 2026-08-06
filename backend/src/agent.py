@@ -21,7 +21,14 @@ logger = logging.getLogger("agent")
 load_dotenv(".env.local")
 
 # Farm & Field Track: Agricultural Voice Assistant for Indian Farmers (Krishi Mitra)
-SYSTEM_PROMPT = """You are Krishi Mitra, a friendly, knowledgeable, and practical agricultural voice assistant for Indian farmers. Your goal is to provide concise, easy-to-understand advice on crop management, soil health, pest control, weather precautions, seasonal farming practices, and government agricultural schemes like PM-Kisan. Keep your spoken responses brief, natural, clear, and encouraging. Do not use markdown formatting, bullet points, emojis, or complex symbols since your output will be read out loud via text-to-speech."""
+SYSTEM_PROMPT = """You are Krishi Mitra, a friendly, knowledgeable, and practical agricultural voice assistant for Indian farmers.
+
+Language & Script Rules:
+1. By default, respond in Hinglish (Hindi words written in Roman/English alphabet, e.g., "Namaste kisan bhai! West Bengal mein monsoon ke season mein aap Dhaan ya Jute ki kheti kar sakte hain"). Hinglish sounds natural when spoken and is easy to read.
+2. If the user explicitly asks you to speak or write in Hindi (Devanagari script, e.g., "Hindi mein bolo"), switch to pure Hindi script.
+3. If the user speaks in English, reply in English.
+
+Your goal is to provide concise, easy-to-understand advice on crop management, soil health, pest control, weather precautions, seasonal farming practices, and government agricultural schemes like PM-Kisan. Keep your spoken responses brief, natural, clear, and encouraging. Do not use markdown formatting, bullet points, emojis, or complex symbols since your output will be read out loud via text-to-speech."""
 
 
 class Assistant(Agent):
@@ -50,7 +57,11 @@ server = AgentServer()
 
 
 def prewarm(proc: JobProcess):
-    proc.userdata["vad"] = silero.VAD.load()
+    proc.userdata["vad"] = silero.VAD.load(
+        min_speech_duration=0.2,
+        min_silence_duration=2.0,
+        prefix_padding_duration=0.5,
+    )
 
 
 server.setup_fnc = prewarm
@@ -68,20 +79,25 @@ async def my_agent(ctx: JobContext):
     session = AgentSession(
         # Speech-to-text (STT) is your agent's ears, turning the user's speech into text that the LLM can understand
         # See all available models at https://docs.livekit.io/agents/models/stt/
-        stt=deepgram.STT(model="nova-3"),
+        stt=deepgram.STT(
+            model="nova-3",
+            language="multi",
+            endpointing_ms=500,
+            smart_format=True,
+        ),
         # A Large Language Model (LLM) is your agent's brain, processing user input and generating a response
         # See all available models at https://docs.livekit.io/agents/models/llm/
         llm=google.LLM(
-            model="gemini-2.5-flash",
+            model="gemini-3.1-flash-lite",
         ),
         # Text-to-speech (TTS) is your agent's voice, turning the LLM's text into speech that the user can hear
         # See all available models as well as voice selections at https://docs.livekit.io/agents/models/tts/
         tts=murf.TTS(
-                voice="Anisha", 
-                style="Conversation",
-                tokenizer=tokenize.basic.SentenceTokenizer(min_sentence_len=2),
-                text_pacing=True
-            ),
+            voice="Anisha", 
+            style="Conversation",
+            tokenizer=tokenize.basic.SentenceTokenizer(min_sentence_len=2),
+            text_pacing=True
+        ),
         # VAD and turn detection are used to determine when the user is speaking and when the agent should respond
         # See more at https://docs.livekit.io/agents/build/turns
         turn_detection=MultilingualModel(),
