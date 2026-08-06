@@ -20,9 +20,8 @@ logger = logging.getLogger("agent")
 
 load_dotenv(".env.local")
 
-# Change this prompt to change what your voice agent does.
-# See README.md for example prompts (customer support, language tutor, receptionist).
-SYSTEM_PROMPT = """You are a friendly and efficient customer support agent for a tech company. Help users with account issues, billing questions, and product troubleshooting. Be concise, empathetic, and solution-oriented. If you don't know something, say so honestly and offer to escalate. Your responses are concise and without complex formatting, emojis, or symbols."""
+# Farm & Field Track: Agricultural Voice Assistant for Indian Farmers (Krishi Mitra)
+SYSTEM_PROMPT = """You are Krishi Mitra, a friendly, knowledgeable, and practical agricultural voice assistant for Indian farmers. Your goal is to provide concise, easy-to-understand advice on crop management, soil health, pest control, weather precautions, seasonal farming practices, and government agricultural schemes like PM-Kisan. Keep your spoken responses brief, natural, clear, and encouraging. Do not use markdown formatting, bullet points, emojis, or complex symbols since your output will be read out loud via text-to-speech."""
 
 
 class Assistant(Agent):
@@ -73,8 +72,8 @@ async def my_agent(ctx: JobContext):
         # A Large Language Model (LLM) is your agent's brain, processing user input and generating a response
         # See all available models at https://docs.livekit.io/agents/models/llm/
         llm=google.LLM(
-                model="gemini-3.5-flash-lite",
-            ),
+            model="gemini-2.5-flash",
+        ),
         # Text-to-speech (TTS) is your agent's voice, turning the LLM's text into speech that the user can hear
         # See all available models as well as voice selections at https://docs.livekit.io/agents/models/tts/
         tts=murf.TTS(

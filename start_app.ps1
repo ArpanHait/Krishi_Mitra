@@ -1,5 +1,8 @@
 $ErrorActionPreference = "Stop"
 
+# Add uv and pnpm installation directories to PATH
+$env:PATH += ";$env:USERPROFILE\.local\bin;$env:APPDATA\npm"
+
 function Test-CommandExists {
   param([string]$CommandName)
 
@@ -7,23 +10,18 @@ function Test-CommandExists {
 }
 
 if (-not (Test-CommandExists "uv")) {
-  Write-Error "Missing required command: uv"
+  Write-Error "Missing required command: uv. Ensure uv is installed or available on PATH."
 }
 
 if (-not (Test-CommandExists "pnpm")) {
-  Write-Error "Missing required command: pnpm"
+  Write-Error "Missing required command: pnpm. Ensure pnpm is installed or available on PATH."
 }
 
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-# Start each service in its own PowerShell window so logs remain visible.
-if (Test-CommandExists "livekit-server") {
-  Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$repoRoot'; livekit-server --dev"
-} else {
-  Write-Warning "livekit-server was not found. Skipping local LiveKit startup and using your configured LIVEKIT_URL instead."
-}
+# Start Backend and Frontend in separate PowerShell windows
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "`$env:PATH += ';$env:USERPROFILE\.local\bin;$env:APPDATA\npm'; Set-Location '$repoRoot\backend'; uv run python src/agent.py dev"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "`$env:PATH += ';$env:USERPROFILE\.local\bin;$env:APPDATA\npm'; Set-Location '$repoRoot\frontend'; pnpm dev"
 
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$repoRoot\backend'; uv run python src/agent.py dev"
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$repoRoot\frontend'; pnpm dev"
-
-Write-Host "Started backend and frontend in separate PowerShell windows."
+Write-Host "Successfully launched Backend and Frontend in separate PowerShell windows!" -ForegroundColor Green
+Write-Host "Open http://localhost:3000 in your browser when both terminals are ready." -ForegroundColor Cyan

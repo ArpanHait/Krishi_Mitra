@@ -39,7 +39,18 @@ export const WelcomeView = ({
 
         <Button
           size="lg"
-          onClick={onStartCall}
+          onClick={() => {
+            if (
+              typeof window !== 'undefined' &&
+              (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)
+            ) {
+              alert(
+                'Microphone access is unavailable.\n\nWebRTC requires a Secure Context. Please make sure you are accessing the app at http://localhost:3000 (not an IP address over HTTP) and that microphone permissions are allowed in your browser.'
+              );
+              return;
+            }
+            onStartCall();
+          }}
           className="mt-6 w-64 rounded-full font-mono text-xs font-bold tracking-wider uppercase"
         >
           {startButtonText}
