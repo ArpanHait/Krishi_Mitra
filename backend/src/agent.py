@@ -67,7 +67,7 @@ def prewarm(proc: JobProcess):
 server.setup_fnc = prewarm
 
 
-@server.rtc_session(agent_name="my-agent")
+@server.rtc_session(agent_name="krishi-mitra")
 async def my_agent(ctx: JobContext):
     # Logging setup
     # Add any other context you want in all log entries here

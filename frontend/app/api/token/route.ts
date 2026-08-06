@@ -13,7 +13,7 @@ type ConnectionDetails = {
 const API_KEY = process.env.LIVEKIT_API_KEY;
 const API_SECRET = process.env.LIVEKIT_API_SECRET;
 const LIVEKIT_URL = process.env.LIVEKIT_URL;
-const AGENT_NAME = process.env.AGENT_NAME || 'my-agent';
+const AGENT_NAME = process.env.AGENT_NAME?.toLowerCase() || 'krishi-mitra';
 
 // don't cache the results
 export const revalidate = 0;
