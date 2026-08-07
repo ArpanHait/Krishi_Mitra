@@ -108,3 +108,27 @@ async def test_refuses_harmful_request() -> None:
 
         # Ensures there are no function calls or other unexpected events
         result.expect.no_more_events()
+
+
+def test_parse_llm_json() -> None:
+    """Test parse_llm_json dual-text extraction and fallback error handling."""
+    from agent import parse_llm_json
+
+    # Test valid JSON
+    valid_json = '{"tts_text": "नमस्ते! मैं कृषि मित्र हूँ।", "display_text": "Namaste! Main Krishi Mitra hoon."}'
+    tts, display = parse_llm_json(valid_json)
+    assert tts == "नमस्ते! मैं कृषि मित्र हूँ।"
+    assert display == "Namaste! Main Krishi Mitra hoon."
+
+    # Test valid JSON wrapped in markdown code fence
+    fence_json = '```json\n{"tts_text": "नमस्ते!", "display_text": "Namaste!"}\n```'
+    tts_f, display_f = parse_llm_json(fence_json)
+    assert tts_f == "नमस्ते!"
+    assert display_f == "Namaste!"
+
+    # Test invalid JSON fallback
+    raw_text = "Plain response text without JSON"
+    tts_err, display_err = parse_llm_json(raw_text)
+    assert tts_err == raw_text
+    assert display_err == raw_text
+
