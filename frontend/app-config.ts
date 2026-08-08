@@ -33,10 +33,9 @@ export interface AppConfig {
 }
 
 export const APP_CONFIG_DEFAULTS: AppConfig = {
-  companyName: 'Murf AI',
-  pageTitle: 'Krishi Mitra — Farm & Field Voice Agent',
-  pageDescription:
-    'An Indian agricultural voice assistant powered by Murf Falcon — #VoiceForBharat',
+  companyName: 'Krishi Mitra 🌾',
+  pageTitle: 'Krishi Mitra 🌾 (कृषि मित्र)',
+  pageDescription: 'Your Voice-First Agricultural Assistant powered by Murf Falcon & LiveKit',
 
   supportsChatInput: true,
   supportsVideoInput: true,
@@ -44,13 +43,13 @@ export const APP_CONFIG_DEFAULTS: AppConfig = {
   isPreConnectBufferEnabled: true,
 
   logo: '/murf-logo.svg',
-  accent: '#6366F1',
+  accent: '#2d6a4f',
   logoDark: '/murf-logo-dark.svg',
-  accentDark: '#818cf8',
-  startButtonText: 'Start talking',
+  accentDark: '#52b788',
+  startButtonText: 'Start Conversation / बात शुरू करें',
 
-  // optional: audio visualization configuration
-  // audioVisualizerType: 'bar',
+  audioVisualizerType: 'bar',
+  audioVisualizerBarCount: 8,
   // audioVisualizerColor: '#002cf2',
   // audioVisualizerColorDark: '#1fd5f9',
   // audioVisualizerColorShift: 0.3,

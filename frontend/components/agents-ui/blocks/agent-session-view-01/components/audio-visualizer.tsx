@@ -4,14 +4,14 @@ import React from 'react';
 import { type MotionProps, motion } from 'motion/react';
 import { useVoiceAssistant } from '@livekit/components-react';
 import { AgentAudioVisualizerAura } from '@/components/agents-ui/agent-audio-visualizer-aura';
-import { AgentAudioVisualizerBar } from '@/components/agents-ui/agent-audio-visualizer-bar';
 import { AgentAudioVisualizerGrid } from '@/components/agents-ui/agent-audio-visualizer-grid';
 import { AgentAudioVisualizerRadial } from '@/components/agents-ui/agent-audio-visualizer-radial';
 import { AgentAudioVisualizerWave } from '@/components/agents-ui/agent-audio-visualizer-wave';
+import { WheatSproutVisualizer } from '@/components/agents-ui/wheat-sprout-visualizer';
 import { cn } from '@/lib/shadcn/utils';
 
 const MotionAgentAudioVisualizerAura = motion.create(AgentAudioVisualizerAura);
-const MotionAgentAudioVisualizerBar = motion.create(AgentAudioVisualizerBar);
+const MotionWheatSproutVisualizer = motion.create(WheatSproutVisualizer);
 const MotionAgentAudioVisualizerGrid = motion.create(AgentAudioVisualizerGrid);
 const MotionAgentAudioVisualizerRadial = motion.create(AgentAudioVisualizerRadial);
 const MotionAgentAudioVisualizerWave = motion.create(AgentAudioVisualizerWave);
@@ -34,7 +34,7 @@ export function AudioVisualizer({
   audioVisualizerType = 'bar',
   audioVisualizerColor,
   audioVisualizerColorShift = 0.3,
-  audioVisualizerBarCount = 5,
+  audioVisualizerBarCount = 7,
   audioVisualizerRadialRadius = 100,
   audioVisualizerRadialBarCount = 25,
   audioVisualizerGridRowCount = 15,
@@ -46,7 +46,40 @@ export function AudioVisualizer({
 }: AudioVisualizerProps) {
   const { state, audioTrack } = useVoiceAssistant();
 
+  // Map LiveKit VoiceAssistantState to WheatVisualizer state
+  let visualizerState: 'ready' | 'connecting' | 'listening' | 'speaking' | 'disconnected' = 'ready';
+  if (state === 'speaking') visualizerState = 'speaking';
+  else if (state === 'listening') visualizerState = 'listening';
+  else if (state === 'thinking' || state === 'initializing') visualizerState = 'connecting';
+
+  const { animate, style, transition, ...restProps } = props;
+  void animate;
+  void style;
+  void transition;
+
   switch (audioVisualizerType) {
+    case 'bar':
+    default: {
+      return (
+        <MotionWheatSproutVisualizer
+          state={visualizerState}
+          audioTrack={audioTrack}
+          barCount={audioVisualizerBarCount ?? 8}
+          isChatOpen={isChatOpen}
+          // Visualizer transparency during active chat: 0.45 = 55% transparent / 45% visible.
+          // Change 0.45 below to adjust opacity in the future (e.g. 0.6 = 40% transparent, 0.3 = 70% transparent)
+          animate={{ opacity: isChatOpen ? 1.0 : 1 }}
+          transition={{ duration: 0.3 }}
+          style={{ opacity: isChatOpen ? 1.0 : 1 }}
+          className={cn(
+            'my-auto min-h-[160px] transition-opacity duration-300',
+            isChatOpen && 'pointer-events-none opacity-10',
+            className
+          )}
+          {...restProps}
+        />
+      );
+    }
     case 'aura': {
       return (
         <MotionAgentAudioVisualizerAura
@@ -114,38 +147,6 @@ export function AudioVisualizer({
             className="size-[450px]"
           />
         </motion.div>
-      );
-    }
-    default: {
-      let size: 'icon' | 'sm' | 'md' | 'lg' | 'xl' = 'icon';
-      let sizedClassName = cn('size-[300px] md:size-[450px]', className);
-
-      if (audioVisualizerBarCount <= 5) {
-        size = 'xl';
-        sizedClassName = cn('size-[450px] *:min-h-[64px] *:w-[64px] gap-4', className);
-      } else if (audioVisualizerBarCount <= 10) {
-        size = 'lg';
-        sizedClassName = cn('size-[450px]', className);
-      } else if (audioVisualizerBarCount <= 15) {
-        size = 'md';
-        sizedClassName = cn('size-[350px] md:size-[450px]', className);
-      } else if (audioVisualizerBarCount <= 30) {
-        size = 'sm';
-        sizedClassName = cn('size-[300px] md:size-[450px]', className);
-      }
-
-      return (
-        <MotionAgentAudioVisualizerBar
-          size={size}
-          state={state}
-          color={audioVisualizerColor}
-          audioTrack={audioTrack}
-          barCount={audioVisualizerBarCount}
-          className={sizedClassName}
-          {...props}
-        >
-          <span className="min-h-2.5 w-2.5 rounded-full bg-current/10 transition-colors duration-250 ease-linear data-[lk-highlighted=true]:bg-current" />
-        </MotionAgentAudioVisualizerBar>
       );
     }
   }

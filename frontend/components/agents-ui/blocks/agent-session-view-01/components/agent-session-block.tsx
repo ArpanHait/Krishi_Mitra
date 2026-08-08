@@ -2,13 +2,19 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, type MotionProps, motion } from 'motion/react';
-import { useAgent, useSessionContext, useSessionMessages } from '@livekit/components-react';
+import {
+  useAgent,
+  useLocalParticipant,
+  useSessionContext,
+  useSessionMessages,
+} from '@livekit/components-react';
 import { AgentChatTranscript } from '@/components/agents-ui/agent-chat-transcript';
 import {
   AgentControlBar,
   type AgentControlBarControls,
 } from '@/components/agents-ui/agent-control-bar';
 import { Shimmer } from '@/components/ai-elements/shimmer';
+import { FloatingMicErrorBar } from '@/components/app/floating-mic-error-bar';
 import { cn } from '@/lib/shadcn/utils';
 import { TileLayout } from './tile-view';
 
@@ -16,42 +22,19 @@ const MotionMessage = motion.create(Shimmer);
 
 const BOTTOM_VIEW_MOTION_PROPS: MotionProps = {
   variants: {
-    visible: {
-      opacity: 1,
-      translateY: '0%',
-    },
-    hidden: {
-      opacity: 0,
-      translateY: '100%',
-    },
+    visible: { opacity: 1, translateY: '0%' },
+    hidden: { opacity: 0, translateY: '100%' },
   },
   initial: 'hidden',
   animate: 'visible',
   exit: 'hidden',
-  transition: {
-    duration: 0.3,
-    delay: 0.5,
-    ease: 'easeOut',
-  },
+  transition: { duration: 0.35, delay: 0.4, ease: 'easeOut' },
 };
 
 const CHAT_MOTION_PROPS: MotionProps = {
   variants: {
-    hidden: {
-      opacity: 0,
-      transition: {
-        ease: 'easeOut',
-        duration: 0.3,
-      },
-    },
-    visible: {
-      opacity: 1,
-      transition: {
-        delay: 0.2,
-        ease: 'easeOut',
-        duration: 0.3,
-      },
-    },
+    hidden: { opacity: 0, transition: { ease: 'easeOut', duration: 0.25 } },
+    visible: { opacity: 1, transition: { delay: 0.2, ease: 'easeOut', duration: 0.25 } },
   },
   initial: 'hidden',
   animate: 'visible',
@@ -60,22 +43,8 @@ const CHAT_MOTION_PROPS: MotionProps = {
 
 const SHIMMER_MOTION_PROPS: MotionProps = {
   variants: {
-    visible: {
-      opacity: 1,
-      transition: {
-        ease: 'easeIn',
-        duration: 0.5,
-        delay: 0.8,
-      },
-    },
-    hidden: {
-      opacity: 0,
-      transition: {
-        ease: 'easeIn',
-        duration: 0.5,
-        delay: 0,
-      },
-    },
+    visible: { opacity: 1, transition: { ease: 'easeIn', duration: 0.4, delay: 0.7 } },
+    hidden: { opacity: 0, transition: { ease: 'easeIn', duration: 0.4, delay: 0 } },
   },
   initial: 'hidden',
   animate: 'visible',
@@ -101,67 +70,117 @@ export function Fade({ top = false, bottom = false, className }: FadeProps) {
   );
 }
 
-export interface AgentSessionView_01Props {
-  /**
-   * Message shown above the controls before the first chat message is sent.
-   *
-   * @default 'Agent is listening, ask it a question'
-   */
-  preConnectMessage?: string;
-  /**
-   * Enables or disables the chat toggle and transcript input controls.
-   *
-   * @default true
-   */
-  supportsChatInput?: boolean;
-  /**
-   * Enables or disables camera controls in the bottom control bar.
-   *
-   * @default true
-   */
-  supportsVideoInput?: boolean;
-  /**
-   * Enables or disables screen sharing controls in the bottom control bar.
-   *
-   * @default true
-   */
-  supportsScreenShare?: boolean;
-  /**
-   * Shows a pre-connect buffer state with a shimmer message before messages appear.
-   *
-   * @default true
-   */
-  isPreConnectBufferEnabled?: boolean;
+// ─── Compact State Pill (matching demo design) ───
+// Small rounded-full pill with colored dot + state text
+function StatePill({
+  agentState,
+  chatOpen = false,
+}: {
+  agentState: string | undefined;
+  chatOpen?: boolean;
+}) {
+  const config = (() => {
+    switch (agentState) {
+      case 'connecting':
+      case 'initializing':
+        return {
+          bg: 'rgba(245,158,11,0.15)',
+          border: 'rgba(245,158,11,0.3)',
+          dotColor: '#f59e0b',
+          dotAnim: 'animate-ping',
+          text: 'Connecting to Krishi Mitra... Please wait',
+        };
+      case 'listening':
+        return {
+          bg: 'rgba(52,211,153,0.15)',
+          border: 'rgba(52,211,153,0.3)',
+          dotColor: '#34d399',
+          dotAnim: 'animate-pulse',
+          text: 'Listening to you... Speak now',
+        };
+      case 'speaking':
+        return {
+          bg: 'rgba(94,234,212,0.12)',
+          border: 'rgba(94,234,212,0.3)',
+          dotColor: '#5eead4',
+          dotAnim: 'animate-bounce',
+          text: 'Krishi Mitra is speaking...',
+        };
+      case 'thinking':
+        return {
+          bg: 'rgba(168,162,158,0.12)',
+          border: 'rgba(168,162,158,0.25)',
+          dotColor: '#a8a29e',
+          dotAnim: 'animate-pulse',
+          text: 'Thinking... / सोच रहे हैं',
+        };
+      default:
+        return {
+          bg: 'rgba(100,116,139,0.15)',
+          border: 'rgba(100,116,139,0.2)',
+          dotColor: '#94a3b8',
+          dotAnim: '',
+          text: 'Ready — Tap below to start',
+        };
+    }
+  })();
 
-  /** Selects the visualizer style rendered in the main tile area. */
+  return (
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={agentState}
+        initial={{ opacity: 0, y: -6 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -6 }}
+        transition={{ duration: 0.25 }}
+        className={cn(
+          'pointer-events-none absolute left-1/2 z-50 -translate-x-1/2 transition-all duration-300',
+          chatOpen ? 'top-3' : 'top-24 md:top-28'
+        )}
+      >
+        <div
+          className="flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold shadow-lg backdrop-blur-md"
+          style={{
+            background: config.bg,
+            border: `1px solid ${config.border}`,
+            color: config.dotColor,
+          }}
+        >
+          <span
+            className={`h-2.5 w-2.5 rounded-full ${config.dotAnim}`}
+            style={{ backgroundColor: config.dotColor }}
+          />
+          <span className="text-slate-200">{config.text}</span>
+        </div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
+export interface AgentSessionView_01Props {
+  preConnectMessage?: string;
+  supportsChatInput?: boolean;
+  supportsVideoInput?: boolean;
+  supportsScreenShare?: boolean;
+  isPreConnectBufferEnabled?: boolean;
   audioVisualizerType?: 'bar' | 'wave' | 'grid' | 'radial' | 'aura';
-  /** Primary hex color used by supported audio visualizer variants. */
   audioVisualizerColor?: `#${string}`;
-  /** Hue shift intensity used by certain visualizers. */
   audioVisualizerColorShift?: number;
-  /** Number of bars to render when `audioVisualizerType` is `bar`. */
   audioVisualizerBarCount?: number;
-  /** Number of rows in the visualizer when `audioVisualizerType` is `grid`. */
   audioVisualizerGridRowCount?: number;
-  /** Number of columns in the visualizer when `audioVisualizerType` is `grid`. */
   audioVisualizerGridColumnCount?: number;
-  /** Number of radial bars when `audioVisualizerType` is `radial`. */
   audioVisualizerRadialBarCount?: number;
-  /** Base radius of the radial visualizer when `audioVisualizerType` is `radial`. */
   audioVisualizerRadialRadius?: number;
-  /** Stroke width of the wave path when `audioVisualizerType` is `wave`. */
   audioVisualizerWaveLineWidth?: number;
-  /** Optional class name merged onto the outer `<section>` container. */
   className?: string;
 }
 
 export function AgentSessionView_01({
-  preConnectMessage = 'Agent is listening, ask it a question',
+  preConnectMessage = 'Krishi Mitra 🌾 is ready — ask your agricultural question!',
   supportsChatInput = true,
   supportsVideoInput = true,
   supportsScreenShare = true,
   isPreConnectBufferEnabled = true,
-
   audioVisualizerType,
   audioVisualizerColor,
   audioVisualizerColorShift,
@@ -181,6 +200,16 @@ export function AgentSessionView_01({
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { state: agentState } = useAgent();
 
+  // Minimal status text below the visualizer
+  let dynamicStatusText = preConnectMessage;
+  if (agentState === 'listening') {
+    dynamicStatusText = 'Listening… / सुन रहे हैं';
+  } else if (agentState === 'speaking') {
+    dynamicStatusText = 'Krishi Mitra is answering… / जवाब दे रहे हैं';
+  } else if (agentState === 'thinking') {
+    dynamicStatusText = 'Thinking… / सोच रहे हैं';
+  }
+
   const controls: AgentControlBarControls = {
     leave: true,
     microphone: true,
@@ -192,22 +221,62 @@ export function AgentSessionView_01({
   useEffect(() => {
     const lastMessage = messages.at(-1);
     const lastMessageIsLocal = lastMessage?.from?.isLocal === true;
-
     if (scrollAreaRef.current && lastMessageIsLocal) {
       scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
     }
   }, [messages]);
 
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.body.classList.toggle('chat-is-open', chatOpen);
+    }
+    return () => {
+      if (typeof document !== 'undefined') {
+        document.body.classList.remove('chat-is-open');
+      }
+    };
+  }, [chatOpen]);
+
+  const { isMicrophoneEnabled, localParticipant } = useLocalParticipant();
+
+  const handleRetryMic = async () => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.mediaDevices) {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+      if (localParticipant) {
+        await localParticipant.setMicrophoneEnabled(true);
+      }
+    } catch (err) {
+      console.error('Failed to enable mic on retry:', err);
+    } finally {
+      if (session.start) {
+        session.start();
+      }
+    }
+  };
+
   return (
     <section
       ref={ref}
-      className={cn('bg-background relative z-10 h-full w-full overflow-hidden', className)}
+      className={cn('relative z-10 h-full w-full overflow-hidden', className)}
+      style={{
+        background: 'linear-gradient(135deg, #0e2a1e 0%, #1e4d38 50%, #12281c 100%)',
+      }}
       {...props}
     >
-      <Fade top className="absolute inset-x-4 top-0 z-10 h-40" />
-      {/* transcript */}
+      {/* ─── State pill or floating mic warning bar ─── */}
+      {!isMicrophoneEnabled ? (
+        <FloatingMicErrorBar onRetry={handleRetryMic} />
+      ) : (
+        <StatePill agentState={agentState} chatOpen={chatOpen} />
+      )}
 
-      <div className="absolute top-0 bottom-[135px] flex w-full flex-col md:bottom-[170px]">
+      {/* ─── Fade from top edge ─── */}
+      <Fade top className="absolute inset-x-4 top-0 z-10 h-32" />
+
+      {/* ─── Chat transcript (Foreground Layer z-[100]) ─── */}
+      <div className="absolute top-0 bottom-[135px] z-[100] flex w-full flex-col md:bottom-[170px]">
         <AnimatePresence>
           {chatOpen && (
             <motion.div
@@ -217,13 +286,14 @@ export function AgentSessionView_01({
               <AgentChatTranscript
                 agentState={agentState}
                 messages={messages}
-                className="mx-auto w-full max-w-2xl [&_.is-user>div]:rounded-[22px] [&>div>div]:px-4 [&>div>div]:pt-40 md:[&>div>div]:px-6"
+                className="mx-auto w-full max-w-3xl [&>div>div]:px-4 [&>div>div]:pt-28 md:[&>div>div]:px-6 md:[&>div>div]:pt-32"
               />
             </motion.div>
           )}
         </AnimatePresence>
       </div>
-      {/* Tile layout */}
+
+      {/* ─── Main tile (visualizer) ─── */}
       <TileLayout
         chatOpen={chatOpen}
         audioVisualizerType={audioVisualizerType}
@@ -236,28 +306,28 @@ export function AgentSessionView_01({
         audioVisualizerGridColumnCount={audioVisualizerGridColumnCount}
         audioVisualizerWaveLineWidth={audioVisualizerWaveLineWidth}
       />
-      {/* Bottom */}
+
+      {/* ─── Bottom control area ─── */}
       <motion.div
         {...BOTTOM_VIEW_MOTION_PROPS}
         className="absolute inset-x-3 bottom-0 z-50 md:inset-x-12"
       >
-        {/* Pre-connect message */}
+        {/* Status shimmer text */}
         {isPreConnectBufferEnabled && (
           <AnimatePresence>
-            {messages.length === 0 && (
-              <MotionMessage
-                key="pre-connect-message"
-                duration={2}
-                aria-hidden={messages.length > 0}
-                {...SHIMMER_MOTION_PROPS}
-                className="pointer-events-none mx-auto block w-full max-w-2xl pb-4 text-center text-sm font-semibold"
-              >
-                {preConnectMessage}
-              </MotionMessage>
-            )}
+            <MotionMessage
+              key={dynamicStatusText}
+              duration={2}
+              {...SHIMMER_MOTION_PROPS}
+              className="pointer-events-none mx-auto block w-full max-w-2xl pb-3 text-center text-xs font-semibold text-[#95d5b2]"
+            >
+              {dynamicStatusText}
+            </MotionMessage>
           </AnimatePresence>
         )}
-        <div className="bg-background relative mx-auto max-w-2xl pb-3 md:pb-12">
+
+        {/* Control bar */}
+        <div className="relative mx-auto max-w-2xl pb-3 md:pb-10">
           <Fade bottom className="absolute inset-x-0 top-0 h-4 -translate-y-full" />
           <AgentControlBar
             variant="livekit"

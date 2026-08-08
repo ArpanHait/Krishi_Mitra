@@ -127,3 +127,6 @@ Edit `frontend/app-config.ts` — company name, page title, logo paths, accent c
 - LiveKit Agents SDK: https://docs.livekit.io/agents
 - LiveKit Agents UI: https://livekit.io/ui
 - Deepgram STT: https://developers.deepgram.com
+
+## Customization Rules & Directives
+- **Always present proposed thoughts and implementation plan**: Before making code edits or executing steps, always outline the thoughts, analysis, and step-by-step plan to the user.

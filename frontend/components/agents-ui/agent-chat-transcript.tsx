@@ -9,7 +9,6 @@ import {
   ConversationContent,
   ConversationScrollButton,
 } from '@/components/ai-elements/conversation';
-import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message';
 
 /**
  * Props for the AgentChatTranscript component.
@@ -31,19 +30,7 @@ export interface AgentChatTranscriptProps extends ComponentProps<'div'> {
 }
 
 /**
- * A chat transcript component that displays a conversation between the user and agent.
- * Shows messages with timestamps and origin indicators, plus a thinking indicator
- * when the agent is processing.
- *
- * @extends ComponentProps<'div'>
- *
- * @example
- * ```tsx
- * <AgentChatTranscript
- *   agentState={agentState}
- *   messages={chatMessages}
- * />
- * ```
+ * Rich styled chat transcript with distinct, color-coded bubble cards for user & agent.
  */
 export function AgentChatTranscript({
   agentState,
@@ -53,24 +40,64 @@ export function AgentChatTranscript({
 }: AgentChatTranscriptProps) {
   return (
     <Conversation className={className} {...props}>
-      <ConversationContent>
+      <ConversationContent className="space-y-4 px-2 py-4">
         {messages.map((receivedMessage) => {
           const { id, timestamp, from, message } = receivedMessage;
-          const locale = navigator?.language ?? 'en-US';
-          const messageOrigin = from?.isLocal ? 'user' : 'assistant';
-          const time = new Date(timestamp);
-          const title = time.toLocaleTimeString(locale, { timeStyle: 'full' });
+          const isUser = from?.isLocal === true;
+          const timeStr = new Date(timestamp).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+          });
 
           return (
-            <Message key={id} title={title} from={messageOrigin}>
-              <MessageContent>
-                <MessageResponse>{message}</MessageResponse>
-              </MessageContent>
-            </Message>
+            <div
+              key={id}
+              className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'} my-2.5`}
+            >
+              {isUser ? (
+                /* User Question Bubble Card (Right Aligned - Glassmorphism Emerald) */
+                <div className="group relative max-w-[85%] rounded-2xl rounded-tr-xs border border-[#52b788]/50 bg-gradient-to-br from-[#2d6a4f]/40 via-[#1b4332]/45 to-[#122c21]/45 px-4.5 py-3.5 shadow-xl backdrop-blur-xl transition-all duration-200 hover:border-[#52b788]/70 sm:max-w-[78%] md:px-5">
+                  <div className="mb-1 flex items-center justify-end gap-1.5 text-[11px] font-bold tracking-wide text-[#74c69d]">
+                    <span>You / आप</span>
+                    <span className="flex size-4.5 items-center justify-center rounded-full bg-[#52b788]/20 text-[10px]">
+                      👤
+                    </span>
+                  </div>
+                  <p className="text-sm leading-relaxed font-medium text-white sm:text-base">
+                    {message}
+                  </p>
+                  <div className="mt-1 text-right text-[10px] font-medium text-emerald-200/70">
+                    {timeStr}
+                  </div>
+                </div>
+              ) : (
+                /* Krishi Mitra Response Bubble Card (Left Aligned - Glassmorphism Gold Accent) */
+                <div className="group relative max-w-[90%] rounded-2xl rounded-tl-xs border border-[#e9c46a]/45 bg-gradient-to-br from-[#184e38]/45 via-[#123929]/50 to-[#0b261b]/50 px-5 py-4 shadow-2xl backdrop-blur-xl transition-all duration-200 hover:border-[#e9c46a]/70 sm:max-w-[82%]">
+                  <div className="mb-1.5 flex items-center gap-2 text-[11px] font-bold tracking-wide text-[#e9c46a]">
+                    <span className="flex size-5 items-center justify-center rounded-lg bg-gradient-to-br from-[#e9c46a] to-[#f4a261] text-xs text-[#261c14] shadow-sm">
+                      🌾
+                    </span>
+                    <span>Krishi Mitra (कृषि मित्र)</span>
+                  </div>
+                  <p className="text-sm leading-relaxed font-medium text-slate-100 sm:text-base">
+                    {message}
+                  </p>
+                  <div className="mt-1.5 text-right text-[10px] font-medium text-[#e9c46a]/70">
+                    {timeStr}
+                  </div>
+                </div>
+              )}
+            </div>
           );
         })}
         <AnimatePresence>
-          {agentState === 'thinking' && <AgentChatIndicator size="sm" />}
+          {agentState === 'thinking' && (
+            <div className="my-2 flex justify-start">
+              <div className="rounded-2xl rounded-tl-xs border border-[#e9c46a]/30 bg-[#184e38]/80 px-4 py-2.5 shadow-lg backdrop-blur-md">
+                <AgentChatIndicator size="sm" />
+              </div>
+            </div>
+          )}
         </AnimatePresence>
       </ConversationContent>
       <ConversationScrollButton />
