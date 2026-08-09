@@ -14,8 +14,10 @@ export function AppHeader({ hidden = false, className = '' }: AppHeaderProps) {
 
   return (
     <header
-      className={`fixed top-0 left-0 z-50 w-full p-4 transition-all duration-300 md:p-6 ${
-        hidden ? 'pointer-events-none -translate-y-full opacity-0' : 'translate-y-0 opacity-100'
+      className={`fixed top-0 left-0 z-50 w-full p-4 transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] md:p-6 ${
+        hidden
+          ? 'pointer-events-none -translate-y-full scale-95 opacity-0'
+          : 'translate-y-0 scale-100 opacity-100'
       } ${className}`}
     >
       <div className="mx-auto flex max-w-4xl flex-col items-center justify-between gap-3 rounded-2xl border border-white/15 bg-[#184e38]/60 px-5 py-3.5 shadow-2xl backdrop-blur-xl sm:flex-row">

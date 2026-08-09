@@ -55,8 +55,8 @@ export function WheatSproutVisualizer({
 }: WheatSproutVisualizerProps) {
   const volumes = useMultibandTrackVolume(audioTrack, {
     bands: barCount,
-    loPass: 100,
-    hiPass: 600,
+    loPass: 50,
+    hiPass: 3400,
   });
 
   const [heights, setHeights] = useState<number[]>(() => [...BASE_HEIGHTS]);
@@ -75,13 +75,13 @@ export function WheatSproutVisualizer({
 
       const next = Array.from({ length: barCount }, (_, i) => {
         const base = BASE_HEIGHTS[i % BASE_HEIGHTS.length];
-        const rawVol = (vols[i] ?? 0) as number;
+        const rawVol = Math.min(1.0, Math.max(0, (vols[i] ?? 0) as number));
 
         if (s === 'speaking') {
-          // Dynamic bouncing synced directly to audio volume intensity & wave phase
-          const wavePhase = Math.sin(now / 80 + i * 1.8) * 0.5 + 0.5;
-          const volBoost = Math.min(1.0, Math.max(0, rawVol)) * 80;
-          const bounceHeight = base + wavePhase * 30 + volBoost;
+          // Dynamic bouncing synced directly to real audio volume intensity & wave phase
+          const dynamicWave = Math.sin(now / 70 + i * 1.5) * 0.5 + 0.5;
+          const volBoost = rawVol > 0.01 ? rawVol * 90 : dynamicWave * 25;
+          const bounceHeight = base + dynamicWave * 20 + volBoost;
           return Math.min(160, Math.max(35, bounceHeight));
         }
 

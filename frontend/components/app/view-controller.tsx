@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useSessionContext } from '@livekit/components-react';
 import type { AppConfig } from '@/app-config';
 import { AgentSessionView_01 } from '@/components/agents-ui/blocks/agent-session-view-01';
+import { AppHeader } from '@/components/app/app-header';
 import { MicErrorCard } from '@/components/app/mic-error-card';
 import { WelcomeView } from '@/components/app/welcome-view';
 import { Button } from '@/components/ui/button';
@@ -138,55 +139,58 @@ export function ViewController({ appConfig }: ViewControllerProps) {
   };
 
   return (
-    <AnimatePresence mode="wait">
-      {/* ─── Microphone permission error ─── */}
-      {hasMicError && (
-        <MotionMicErrorCard key="mic-error" {...VIEW_MOTION_PROPS} onRetry={handleStartCall} />
-      )}
+    <>
+      <AppHeader hidden={isConnected} />
+      <AnimatePresence mode="wait">
+        {/* ─── Microphone permission error ─── */}
+        {hasMicError && (
+          <MotionMicErrorCard key="mic-error" {...VIEW_MOTION_PROPS} onRetry={handleStartCall} />
+        )}
 
-      {/* ─── Call ended screen ─── */}
-      {!isConnected && hasEnded && !hasMicError && (
-        <motion.div key="call-ended" className="min-h-svh w-full" {...VIEW_MOTION_PROPS}>
-          <CallEndedView onNewCall={handleStartCall} />
-        </motion.div>
-      )}
+        {/* ─── Call ended screen ─── */}
+        {!isConnected && hasEnded && !hasMicError && (
+          <motion.div key="call-ended" className="min-h-svh w-full" {...VIEW_MOTION_PROPS}>
+            <CallEndedView onNewCall={handleStartCall} />
+          </motion.div>
+        )}
 
-      {/* ─── Welcome / landing screen ─── */}
-      {!isConnected && !hasMicError && !hasEnded && (
-        <MotionWelcomeView
-          key="welcome"
-          {...VIEW_MOTION_PROPS}
-          startButtonText={appConfig.startButtonText}
-          onStartCall={handleStartCall}
-          onMicError={() => setHasMicError(true)}
-        />
-      )}
+        {/* ─── Welcome / landing screen ─── */}
+        {!isConnected && !hasMicError && !hasEnded && (
+          <MotionWelcomeView
+            key="welcome"
+            {...VIEW_MOTION_PROPS}
+            startButtonText={appConfig.startButtonText}
+            onStartCall={handleStartCall}
+            onMicError={() => setHasMicError(true)}
+          />
+        )}
 
-      {/* ─── Active session view ─── */}
-      {isConnected && (
-        <MotionSessionView
-          key="session-view"
-          {...VIEW_MOTION_PROPS}
-          supportsChatInput={appConfig.supportsChatInput}
-          supportsVideoInput={appConfig.supportsVideoInput}
-          supportsScreenShare={appConfig.supportsScreenShare}
-          isPreConnectBufferEnabled={appConfig.isPreConnectBufferEnabled}
-          audioVisualizerType={appConfig.audioVisualizerType}
-          audioVisualizerColor={
-            resolvedTheme === 'dark'
-              ? appConfig.audioVisualizerColorDark
-              : appConfig.audioVisualizerColor
-          }
-          audioVisualizerColorShift={appConfig.audioVisualizerColorShift}
-          audioVisualizerBarCount={appConfig.audioVisualizerBarCount}
-          audioVisualizerGridRowCount={appConfig.audioVisualizerGridRowCount}
-          audioVisualizerGridColumnCount={appConfig.audioVisualizerGridColumnCount}
-          audioVisualizerRadialBarCount={appConfig.audioVisualizerRadialBarCount}
-          audioVisualizerRadialRadius={appConfig.audioVisualizerRadialRadius}
-          audioVisualizerWaveLineWidth={appConfig.audioVisualizerWaveLineWidth}
-          className="fixed inset-0"
-        />
-      )}
-    </AnimatePresence>
+        {/* ─── Active session view ─── */}
+        {isConnected && (
+          <MotionSessionView
+            key="session-view"
+            {...VIEW_MOTION_PROPS}
+            supportsChatInput={appConfig.supportsChatInput}
+            supportsVideoInput={appConfig.supportsVideoInput}
+            supportsScreenShare={appConfig.supportsScreenShare}
+            isPreConnectBufferEnabled={appConfig.isPreConnectBufferEnabled}
+            audioVisualizerType={appConfig.audioVisualizerType}
+            audioVisualizerColor={
+              resolvedTheme === 'dark'
+                ? appConfig.audioVisualizerColorDark
+                : appConfig.audioVisualizerColor
+            }
+            audioVisualizerColorShift={appConfig.audioVisualizerColorShift}
+            audioVisualizerBarCount={appConfig.audioVisualizerBarCount}
+            audioVisualizerGridRowCount={appConfig.audioVisualizerGridRowCount}
+            audioVisualizerGridColumnCount={appConfig.audioVisualizerGridColumnCount}
+            audioVisualizerRadialBarCount={appConfig.audioVisualizerRadialBarCount}
+            audioVisualizerRadialRadius={appConfig.audioVisualizerRadialRadius}
+            audioVisualizerWaveLineWidth={appConfig.audioVisualizerWaveLineWidth}
+            className="fixed inset-0"
+          />
+        )}
+      </AnimatePresence>
+    </>
   );
 }

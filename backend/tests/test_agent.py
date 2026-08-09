@@ -20,20 +20,21 @@ async def test_offers_assistance() -> None:
         # Run an agent turn following the user's greeting
         result = await session.run(user_input="Hello")
 
-        # Evaluate the agent's response for friendliness
-        await (
-            result.expect.next_event()
-            .is_message(role="assistant")
-            .judge(
-                llm,
-                intent="""
-                Greets the user in a friendly manner.
+        # Handle optional lookup_caller function call event before assistant message
+        event = result.expect.next_event()
+        if not event.is_message():
+            result.expect.next_event()  # FunctionCallOutputEvent
+            event = result.expect.next_event()
 
-                Optional context that may or may not be included:
-                - Offer of assistance with any request the user may have
-                - Other small talk or chit chat is acceptable, so long as it is friendly and not too intrusive
-                """,
-            )
+        await event.is_message(role="assistant").judge(
+            llm,
+            intent="""
+            Greets the user in a friendly manner.
+
+            Optional context that may or may not be included:
+            - Offer of assistance with any request the user may have
+            - Other small talk or chit chat is acceptable, so long as it is friendly and not too intrusive
+            """,
         )
 
         # Ensures there are no function calls or other unexpected events
@@ -132,3 +133,29 @@ def test_parse_llm_json() -> None:
     assert tts_err == raw_text
     assert display_err == raw_text
 
+
+@pytest.mark.asyncio
+async def test_english_query_returns_pure_english() -> None:
+    """Evaluation of the agent responding strictly in English when queried in English."""
+    async with (
+        _llm() as llm,
+        AgentSession(llm=llm) as session,
+    ):
+        await session.start(Assistant())
+
+        result = await session.run(
+            user_input="What fertilizer should I use for wheat in the Rabi season?"
+        )
+
+        await (
+            result.expect.next_event()
+            .is_message(role="assistant")
+            .judge(
+                llm,
+                intent="""
+                Responds entirely in English to the user's agricultural question about wheat fertilizer.
+                The response must NOT contain Hindi words, Hinglish expressions, or Devanagari script.
+                """,
+            )
+        )
+        result.expect.no_more_events()
