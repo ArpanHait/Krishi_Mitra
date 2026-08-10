@@ -440,9 +440,9 @@ server = AgentServer()
 
 def prewarm(proc: JobProcess):
     proc.userdata["vad"] = silero.VAD.load(
-        min_speech_duration=0.2,
+        min_speech_duration=0.5,
         min_silence_duration=1.2,
-        prefix_padding_duration=0.5,
+        prefix_padding_duration=0.6,
     )
 
 
@@ -523,7 +523,7 @@ async def my_agent(ctx: JobContext):
                 "আবহাওয়া",
                 "বৃষ্টি",
             ],
-            endpointing_ms=400,
+            endpointing_ms=500,
             smart_format=True,
         ),
         llm=google.LLM(
