@@ -1,0 +1,44 @@
+{
+  "west_bengal": {
+    "burdwan": {
+      "paddy": { "min_price": 2050, "max_price": 2250, "modal_price": 2180, "market": "Burdwan Mandi", "unit": "Quintal" },
+      "rice": { "min_price": 2900, "max_price": 3300, "modal_price": 3100, "market": "Burdwan Mandi", "unit": "Quintal" },
+      "potato": { "min_price": 1350, "max_price": 1550, "modal_price": 1450, "market": "Burdwan Mandi", "unit": "Quintal" },
+      "jute": { "min_price": 4800, "max_price": 5300, "modal_price": 5050, "market": "Burdwan Mandi", "unit": "Quintal" },
+      "mustard": { "min_price": 5200, "max_price": 5600, "modal_price": 5450, "market": "Burdwan Mandi", "unit": "Quintal" },
+      "wheat": { "min_price": 2150, "max_price": 2350, "modal_price": 2275, "market": "Burdwan Mandi", "unit": "Quintal" },
+      "maize": { "min_price": 1950, "max_price": 2200, "modal_price": 2090, "market": "Burdwan Mandi", "unit": "Quintal" }
+    },
+    "hooghly": {
+      "potato": { "min_price": 1380, "max_price": 1580, "modal_price": 1480, "market": "Tarakeswar Mandi", "unit": "Quintal" },
+      "paddy": { "min_price": 2040, "max_price": 2240, "modal_price": 2160, "market": "Kamarpukur Mandi", "unit": "Quintal" },
+      "jute": { "min_price": 4850, "max_price": 5350, "modal_price": 5100, "market": "Hooghly Mandi", "unit": "Quintal" }
+    },
+    "bankura": {
+      "paddy": { "min_price": 2020, "max_price": 2220, "modal_price": 2140, "market": "Bankura Sadar Mandi", "unit": "Quintal" },
+      "mustard": { "min_price": 5150, "max_price": 5550, "modal_price": 5400, "market": "Bankura Mandi", "unit": "Quintal" },
+      "potato": { "min_price": 1320, "max_price": 1520, "modal_price": 1420, "market": "Kotulpur Mandi", "unit": "Quintal" }
+    },
+    "nadia": {
+      "jute": { "min_price": 4900, "max_price": 5400, "modal_price": 5150, "market": "Krishnanagar Mandi", "unit": "Quintal" },
+      "paddy": { "min_price": 2060, "max_price": 2260, "modal_price": 2190, "market": "Ranaghat Mandi", "unit": "Quintal" },
+      "vegetables": { "min_price": 1500, "max_price": 2500, "modal_price": 2000, "market": "Krishnanagar Mandi", "unit": "Quintal" }
+    },
+    "kolkata": {
+      "rice": { "min_price": 3000, "max_price": 3500, "modal_price": 3250, "market": "Posta Mandi Kolkata", "unit": "Quintal" },
+      "potato": { "min_price": 1450, "max_price": 1650, "modal_price": 1550, "market": "Kole Market Kolkata", "unit": "Quintal" },
+      "onion": { "min_price": 1700, "max_price": 2100, "modal_price": 1900, "market": "Posta Mandi Kolkata", "unit": "Quintal" }
+    }
+  },
+  "default_benchmarks": {
+    "paddy": { "min_price": 2040, "max_price": 2240, "modal_price": 2180, "market": "Regional APMC Mandi", "unit": "Quintal" },
+    "rice": { "min_price": 2900, "max_price": 3300, "modal_price": 3100, "market": "Regional Wholesale Mandi", "unit": "Quintal" },
+    "potato": { "min_price": 1350, "max_price": 1550, "modal_price": 1450, "market": "Regional APMC Mandi", "unit": "Quintal" },
+    "jute": { "min_price": 4800, "max_price": 5300, "modal_price": 5050, "market": "Regional APMC Mandi", "unit": "Quintal" },
+    "mustard": { "min_price": 5200, "max_price": 5600, "modal_price": 5450, "market": "Regional APMC Mandi", "unit": "Quintal" },
+    "wheat": { "min_price": 2150, "max_price": 2350, "modal_price": 2275, "market": "Regional APMC Mandi", "unit": "Quintal" },
+    "onion": { "min_price": 1600, "max_price": 2000, "modal_price": 1850, "market": "Regional APMC Mandi", "unit": "Quintal" },
+    "maize": { "min_price": 1950, "max_price": 2200, "modal_price": 2090, "market": "Regional APMC Mandi", "unit": "Quintal" },
+    "cotton": { "min_price": 6200, "max_price": 6800, "modal_price": 6500, "market": "Regional APMC Mandi", "unit": "Quintal" }
+  }
+}

@@ -22,6 +22,7 @@ from livekit.plugins import deepgram, google, murf, noise_cancellation, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 import db
+import tools
 
 logger = logging.getLogger("agent")
 
@@ -32,7 +33,7 @@ SYSTEM_PROMPT = """You are Krishi Mitra (🌾), an independent, warm, friendly, 
 
 ### 1. STRICT LANGUAGE MATCHING DIRECTIVE (HIGHEST PRIORITY OVERRIDE)
 - YOU MUST ALWAYS MATCH AND RESPOND IN THE EXACT SAME LANGUAGE AS THE USER'S LATEST INPUT!
-- IF THE USER SPEAKS TO YOU IN ENGLISH (e.g. "Do you know my name?", "What fertilizer should I use for wheat?", "Hello", "Can you help me?"):
+- IF THE USER SPEAKS TO YOU IN ENGLISH (e.g. "Do you know my name?", "What fertilizer should I use for wheat?", "What is the mandi price of paddy?", "Hello", "Can you help me?"):
   * YOU MUST RESPOND 100% IN PURE ENGLISH for BOTH "tts_text" AND "display_text"!
   * ABSOLUTELY ZERO HINDI WORDS, ZERO DEVANAGARI CHARACTERS, AND ZERO HINGLISH EXPRESSIONS when the user speaks in English! Both "tts_text" and "display_text" MUST be written strictly in standard English text.
 - IF THE USER SPEAKS TO YOU IN BENGALI:
@@ -64,6 +65,7 @@ You are an expert in the following agricultural and allied topics. Answer confid
 - Animal Husbandry (Basic): Cattle care, poultry basics, dairy farming tips, fodder crops, veterinary first-aid advice.
 - Weather & Climate: Monsoon planning, drought management, frost protection, climate-resilient crops.
 - Farm Equipment: Basic guidance on tractors, tillers, sprayers, harvesting equipment, and maintenance tips.
+- Mandi Prices & Market Rates: Real-time wholesale prices for paddy, potato, jute, mustard, wheat, rice, etc.
 
 ### 5. INDIA-SPECIFIC FARMING KNOWLEDGE
 Always consider the Indian agricultural context when answering:
@@ -139,7 +141,7 @@ Achieve at least one of these in every response:
 3. Provide reassurance and clear next steps without making unsupported promises.
 
 ### 11. GUARDRAILS & LIMITS (STRICT COMPLIANCE REQUIRED)
-- Market Prices (Mandi Bhav): NEVER state a market price as a current guaranteed fact without stating a source and recommending local mandi verification.
+- Market Prices (Mandi Bhav): NEVER state a market price as a current guaranteed fact without using `get_mandi_prices` tool and advising local mandi verification.
 - Pesticides & Chemicals: NEVER recommend chemical dosages or dangerous pesticides without adding a safety warning to consult a local agricultural extension officer before application.
 - Promises: NEVER guarantee crop yields, profits, or government scheme approvals.
 - Dynamic Off-Topic Refusal (Non-Agricultural / Financial / Medical / General off-topic):
@@ -159,32 +161,22 @@ JSON Structure:
 
 ### 13. FEW-SHOT EXAMPLES (Follow these patterns)
 
-EXAMPLE 1 — English farming query:
-User: "What fertilizer should I use for wheat in Rabi season?"
+EXAMPLE 1 — English weather & mandi query:
+User: "What is the mandi price of paddy in Burdwan today?"
 Response:
-{"tts_text": "For wheat in the Rabi season, apply a balanced NPK fertilizer ratio of 120:60:40 kg per hectare. Apply half of the nitrogen along with full phosphorus and potassium during land preparation, and top-dress the remaining nitrogen at first irrigation.", "display_text": "For wheat in the Rabi season, apply a balanced NPK fertilizer ratio of 120:60:40 kg per hectare. Apply half of the nitrogen along with full phosphorus and potassium during land preparation, and top-dress the remaining nitrogen at first irrigation."}
+{"tts_text": "As per today's live Agmarknet report for paddy in Burdwan Mandi, the modal price is 2,180 rupees per quintal, with a minimum of 2,050 rupees and a maximum of 2,250 rupees. Please verify rates at your local market before finalizing any sale.", "display_text": "As per today's live Agmarknet report for paddy in Burdwan Mandi, the modal price is ₹2,180/quintal (Min: ₹2,050, Max: ₹2,250). Please verify rates at your local market before finalizing any sale."}
 
-EXAMPLE 2 — Hindi farming query:
-User: "Mere dhaan ke patte peele ho rahe hain, kya karun?"
+EXAMPLE 2 — Hindi weather query:
+User: "Kya aaj Burdwan mein baarish hogi?"
 Response:
-{"tts_text": "धान के पत्ते पीले होना आमतौर पर नाइट्रोजन की कमी की निशानी है। आप प्रति एकड़ 20 किलो यूरिया का छिड़काव करें, लेकिन ध्यान रखें कि खेत में हल्का पानी हो। अगर एक हफ्ते में सुधार न दिखे, तो अपने नजदीकी कृषि विज्ञान केंद्र से मिट्टी की जांच करवाएं।", "display_text": "धान के पत्ते पीले होना आमतौर पर नाइट्रोजन की कमी की निशानी है। आप प्रति एकड़ 20 किलो यूरिया का छिड़काव करें, लेकिन ध्यान रखें कि खेत में हल्का पानी हो। अगर एक हफ्ते में सुधार न दिखे, तो अपने नजदीकी कृषि विज्ञान केंद्र से मिट्टी की जांच करवाएं।"}
+{"tts_text": "आज बर्धमान में लाइव मौसम रिपोर्ट के अनुसार तापमान 32 डिग्री सेल्सियस रहेगा और आज लगभग 5 मिलीमीटर बारिश होने की संभावना है। छिड़काव या कटाई का काम बारिश को ध्यान में रखकर करें।", "display_text": "आज बर्धमान में लाइव मौसम रिपोर्ट के अनुसार तापमान 32°C रहेगा और आज लगभग 5 mm बारिश होने की संभावना है। छिड़काव या कटाई का काम बारिश को ध्यान में रखकर करें।"}
 
 EXAMPLE 3 — Bengali farming query:
 User: "আমার পাট গাছের পাতা হলুদ হয়ে যাচ্ছে"
 Response:
 {"tts_text": "পাট গাছের পাতা হলুদ হওয়া প্রধানত নাইট্রোজেনের অভাবের লক্ষণ। আপনি প্রতি একরে ১৫-২০ কেজি ইউরিয়া সার প্রয়োগ করুন। এছাড়া জমিতে নিষ্কাশনের ব্যবস্থা ভালো রাখুন। সমস্যা বজায় থাকলে নিকটস্থ কৃষি কর্মকর্তার সাথে কথা বলুন।", "display_text": "পাট গাছের পাতা হলুদ হওয়া প্রধানত নাইট্রোজেনের অভাবের লক্ষণ। আপনি প্রতি একরে ১৫-২০ কেজি ইউরিয়া সার প্রয়োগ করুন। এছাড়া জমিতে নিষ্কাশনের ব্যবস্থা ভালো রাখুন। সমস্যা বজায় থাকলে নিকটস্থ কৃষি কর্মকর্তার সাথে কথা বলুন।"}
 
-EXAMPLE 4 — Off-topic refusal (English):
-User: "What is the best programming language to learn?"
-Response:
-{"tts_text": "I appreciate your curiosity! However, I'm Krishi Mitra, an agricultural assistant, so programming is outside my expertise. I'd recommend exploring platforms like freeCodeCamp or Coursera for great programming courses.", "display_text": "I appreciate your curiosity! However, I'm Krishi Mitra, an agricultural assistant, so programming is outside my expertise. I'd recommend exploring platforms like freeCodeCamp or Coursera for great programming courses."}
-
-EXAMPLE 5 — Off-topic refusal (Hindi):
-User: "Mera bank account ka OTP nahi aa raha"
-Response:
-{"tts_text": "भाई, मैं कृषि मित्र हूं और बैंकिंग मामलों में मदद नहीं कर सकता। कृपया अपने बैंक के कस्टमर केयर नंबर पर कॉल करें या नजदीकी बैंक शाखा में जाएं। और हां, अपना ओटीपी कभी किसी को शेयर मत करें!", "display_text": "भाई, मैं कृषि मित्र हूं और बैंकिंग मामलों में मदद नहीं कर सकता। कृपया अपने बैंक के कस्टमर केयर नंबर पर कॉल करें या नजदीकी बैंक शाखा में जाएं। और हां, अपना ओटीपी कभी किसी को शेयर मत करें!"}
-
-### 14. PERSISTENT MEMORY, CONSENT & DELETION PROTOCOL (STRICT REQUIREMENT)
+### 14. PERSISTENT MEMORY, CONSENT & DELETION PROTOCOL
 You have access to tools `lookup_caller`, `save_farmer_facts`, and `forget_farmer_facts`.
 
 1. EXPLICIT CONSENT BEFORE SAVING ANY INFORMATION:
@@ -216,6 +208,19 @@ You have access to tools `lookup_caller`, `save_farmer_facts`, and `forget_farme
    - When a returning farmer calls back, if their saved profile exists in the database, welcome them back by name in their saved language_preference, reference their last discussed topic or crops, and ask how things are going:
      * English: "Hello Ramesh! Last time we spoke about your cotton. Did that help? How is your field doing today?"
      * Hindi: "नमस्ते रमेश जी! पिछली बार हमने आपकी कपास की फ़सल के बारे में चर्चा की थी। क्या उससे फ़ायदा हुआ? आज आपकी फ़सल कैसी है?"
+
+### 15. EXTERNAL REAL-TIME TOOLS & MANDI/WEATHER PROTOCOL
+You have access to real-time tools `get_district_weather` and `get_mandi_prices`.
+
+1. WEATHER LOOKUP MANDATE (`get_district_weather`):
+   - Use `get_district_weather(district_name=..., state=...)` whenever the user asks about weather, temperature, rain forecasts, or sowing/spraying weather conditions for a district.
+   - Always report the date, current temperature, min/max temperatures, and rain expectation in the user's spoken language.
+
+2. MANDI / MARKET PRICE MANDATE (`get_mandi_prices`):
+   - Use `get_mandi_prices(commodity=..., district=..., state=...)` whenever the user asks about current mandi rates, wholesale prices, crop market prices (e.g. paddy, potato, jute, mustard, wheat), or selling rates in a district.
+   - TIMESTAMP RULE: You MUST state the date of the report (e.g. "Aaj ke live update ke anusar..." / "As per today's report...").
+   - MANDI GUARDRAIL: Speak the modal price per quintal clearly and ALWAYS remind the farmer to verify rates at their local market before selling!
+   - NEVER hallucinate or invent market rates out of thin air. Always rely on the tool output!
 """
 
 
@@ -320,7 +325,7 @@ class Assistant(Agent):
             land_size: Size of farm land (e.g. '2 acres').
             language_preference: Primary language spoken by farmer ('english', 'hindi', 'bengali').
             district: District / state (e.g. 'Burdwan, West Bengal').
-            last_topic: Last agricultural topic discussed (e.g. 'Sub-1 paddy selection').
+            last_topic: Last agricultural question/topic discussed (e.g. 'Sub-1 paddy selection', 'Mustard pest control'). NEVER pass location/district as last_topic.
         """
         facts = {
             "crops_grown": crops,
@@ -351,6 +356,44 @@ class Assistant(Agent):
         return json.dumps(
             {"success": True, "message": "All stored profile facts deleted."},
             ensure_ascii=False,
+        )
+
+    @function_tool
+    async def get_district_weather(
+        self,
+        context: RunContext,
+        district_name: str,
+        state: str = "West Bengal",
+    ) -> str:
+        """TOOL 1: get_district_weather
+        Use this tool whenever the user asks about weather, temperature, rain forecasts, or sowing/spraying conditions for a district.
+
+        Args:
+            district_name: Name of district (e.g. 'Burdwan', 'Hooghly', 'Bankura', 'Nadia', 'Kolkata').
+            state: Name of state (default 'West Bengal').
+        """
+        return await tools.fetch_district_weather(
+            district_name=district_name, state=state
+        )
+
+    @function_tool
+    async def get_mandi_prices(
+        self,
+        context: RunContext,
+        commodity: str,
+        district: str = "Burdwan",
+        state: str = "West Bengal",
+    ) -> str:
+        """TOOL 2: get_mandi_prices
+        Use this tool whenever the user asks about current mandi rates, wholesale prices, crop market prices (e.g. paddy, potato, jute), or selling rates in a district.
+
+        Args:
+            commodity: Commodity / crop name (e.g. 'Paddy', 'Rice', 'Potato', 'Jute', 'Mustard', 'Wheat').
+            district: District name (default 'Burdwan').
+            state: State name (default 'West Bengal').
+        """
+        return await tools.fetch_mandi_prices(
+            commodity=commodity, district=district, state=state
         )
 
     async def tts_node(self, text: AsyncIterable[str], model_settings: ModelSettings):
@@ -424,10 +467,19 @@ async def my_agent(ctx: JobContext):
                 "paddy",
                 "cotton",
                 "mustard",
+                "potato",
+                "jute",
+                "mandi",
+                "weather",
+                "temperature",
+                "rainfall",
                 "soil",
                 "NPK",
                 "urea",
                 "Burdwan",
+                "Hooghly",
+                "Bankura",
+                "Nadia",
                 "Krishi",
                 "Mitra",
                 "खेती",
@@ -436,6 +488,11 @@ async def my_agent(ctx: JobContext):
                 "गेहूं",
                 "धान",
                 "सरसों",
+                "आलू",
+                "मंडी",
+                "भाव",
+                "मौसम",
+                "बारिश",
                 "कीटनाशक",
                 "यूरिया",
                 "मिट्टी",
@@ -460,6 +517,11 @@ async def my_agent(ctx: JobContext):
                 "আমন",
                 "বোরো",
                 "কাটা",
+                "আলু",
+                "বাজার",
+                "দাম",
+                "আবহাওয়া",
+                "বৃষ্টি",
             ],
             endpointing_ms=400,
             smart_format=True,
@@ -504,18 +566,30 @@ async def my_agent(ctx: JobContext):
     if profile and profile.get("name"):
         name = profile.get("name", "")
         lang_pref = str(profile.get("language_preference", "")).lower()
-        topic_or_crop = (
-            profile.get("last_topic")
-            or profile.get("crops_grown")
-            or profile.get("district")
-            or ("your crop" if lang_pref == "english" else "आपकी फ़सल")
-        )
-        if lang_pref == "english":
-            greeting_text = f"Hello {name}! Last time we spoke about your {topic_or_crop}. Did that help? How is your field doing today and how can I assist you?"
-        elif lang_pref == "bengali":
-            greeting_text = f"নমস্কার {name}! গতবার আমরা আপনার {topic_or_crop} নিয়ে কথা বলেছিলাম। আজ আপনার ফসল কেমন আছে এবং আমি আপনাকে কীভাবে সাহায্য করতে পারি?"
+        last_topic = str(profile.get("last_topic") or "").strip()
+        crops_grown = str(profile.get("crops_grown") or "").strip()
+
+        if last_topic:
+            if lang_pref == "english":
+                greeting_text = f"Hello {name}! Last time we discussed {last_topic}. How is your field doing today and how can I assist you?"
+            elif lang_pref == "bengali":
+                greeting_text = f"নমস্কার {name}! গতবার আমরা {last_topic} নিয়ে কথা বলেছিলাম। আজ আপনার ফসল কেমন আছে এবং আমি আপনাকে কীভাবে সাহায্য করতে পারি?"
+            else:
+                greeting_text = f"नमस्ते {name} जी! पिछली बार हमने {last_topic} के बारे में चर्चा की थी। क्या उससे फ़ायदा हुआ? आज आपकी फ़सल कैसी है और मैं कैसे सहायता कर सकता हूँ?"
+        elif crops_grown:
+            if lang_pref == "english":
+                greeting_text = f"Hello {name}! Hope your {crops_grown} crop is doing well. How can I assist you with your farm today?"
+            elif lang_pref == "bengali":
+                greeting_text = f"নমস্কার {name}! আশা করি আপনার {crops_grown} ফসল ভালো আছে। আজ আমি আপনাকে কীভাবে সাহায্য করতে পারি?"
+            else:
+                greeting_text = f"नमस्ते {name} जी! आशा है आपकी {crops_grown} की फ़सल अच्छी चल रही है। आज मैं आपकी क्या सहायता कर सकता हूँ?"
         else:
-            greeting_text = f"नमस्ते {name} जी! पिछली बार हमने {topic_or_crop} के बारे में चर्चा की थी। क्या उससे फ़ायदा हुआ? आज आपकी फ़सल कैसी है और मैं कैसे सहायता कर सकता हूँ?"
+            if lang_pref == "english":
+                greeting_text = f"Hello {name}! Welcome back to Krishi Mitra. How can I assist you with your farm today?"
+            elif lang_pref == "bengali":
+                greeting_text = f"নমস্কার {name}! কৃষি মিত্রতে আপনাকে স্বাগতম। আজ আমি আপনাকে কীভাবে সাহায্য করতে পারি?"
+            else:
+                greeting_text = f"नमस्ते {name} जी! कृषि मित्र में आपका फिर से स्वागत है। आज मैं आपकी फ़सल या खेती में कैसे सहायता कर सकता हूँ?"
 
         greeting_json = json.dumps(
             {

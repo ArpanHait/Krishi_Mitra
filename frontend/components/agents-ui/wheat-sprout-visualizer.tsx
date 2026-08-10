@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import type { LocalAudioTrack, RemoteAudioTrack } from 'livekit-client';
 import {
   type TrackReferenceOrPlaceholder,
@@ -59,7 +59,8 @@ export function WheatSproutVisualizer({
     hiPass: 3400,
   });
 
-  const [heights, setHeights] = useState<number[]>(() => [...BASE_HEIGHTS]);
+  const stalkRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const currentHeightsRef = useRef<number[]>([...BASE_HEIGHTS]);
   const rafRef = useRef<number | null>(null);
   const stateRef = useRef(state);
   const volRef = useRef<Float32Array | number[]>(volumes ?? []);
@@ -68,41 +69,47 @@ export function WheatSproutVisualizer({
   volRef.current = volumes ?? [];
 
   useEffect(() => {
+    // Lerp factor: 0.22 for silky 120 FPS high-refresh spring physics
+    const LERP_FACTOR = 0.22;
+
     const animate = () => {
       const now = Date.now();
       const s = stateRef.current;
       const vols = volRef.current;
 
-      const next = Array.from({ length: barCount }, (_, i) => {
+      for (let i = 0; i < barCount; i++) {
         const base = BASE_HEIGHTS[i % BASE_HEIGHTS.length];
         const rawVol = Math.min(1.0, Math.max(0, (vols[i] ?? 0) as number));
+        let targetHeight = base;
 
         if (s === 'speaking') {
           // Dynamic bouncing synced directly to real audio volume intensity & wave phase
           const dynamicWave = Math.sin(now / 70 + i * 1.5) * 0.5 + 0.5;
           const volBoost = rawVol > 0.01 ? rawVol * 90 : dynamicWave * 25;
-          const bounceHeight = base + dynamicWave * 20 + volBoost;
-          return Math.min(160, Math.max(35, bounceHeight));
-        }
-
-        if (s === 'listening') {
+          targetHeight = Math.min(165, Math.max(35, base + dynamicWave * 20 + volBoost));
+        } else if (s === 'listening') {
           // Gentle breathing sway
-          const breathing = base + Math.sin(now / 350 + i * 0.8) * 10;
-          return Math.max(25, breathing);
-        }
-
-        if (s === 'connecting') {
+          targetHeight = Math.max(25, base + Math.sin(now / 350 + i * 0.8) * 10);
+        } else if (s === 'connecting') {
           // Wave pulse
-          const wave = Math.sin(now / 200 + i * 1.2) * 18 + 40;
-          return Math.max(20, wave);
+          targetHeight = Math.max(20, Math.sin(now / 200 + i * 1.2) * 18 + 40);
+        } else {
+          // Ambient flow
+          targetHeight = Math.max(25, base + Math.sin(now / 350 + i * 0.7) * 8);
         }
 
-        // Ready / Disconnected ambient flow (never stays static or frozen on landing!)
-        const ambientFlow = base + Math.sin(now / 350 + i * 0.7) * 8;
-        return Math.max(25, ambientFlow);
-      });
+        // Apply Linear Interpolation (Lerp) for liquid-smooth 120 FPS motion
+        const curr = currentHeightsRef.current[i] ?? base;
+        const smoothed = curr + (targetHeight - curr) * LERP_FACTOR;
+        currentHeightsRef.current[i] = smoothed;
 
-      setHeights(next);
+        // Directly mutate DOM height style (Zero React re-render overhead)
+        const el = stalkRefs.current[i];
+        if (el) {
+          el.style.height = `${smoothed}px`;
+        }
+      }
+
       rafRef.current = requestAnimationFrame(animate);
     };
 
@@ -113,8 +120,6 @@ export function WheatSproutVisualizer({
   }, [barCount]);
 
   return (
-    // Note: opacity: 0.45 = 55% transparent / 45% visible when chat box is open.
-    // Change 0.45 below to adjust transparency (e.g., 0.6 = 40% transparent, 0.3 = 70% transparent)
     <div
       className={`relative flex flex-col items-center justify-end py-4 transition-all duration-300 ${
         isChatOpen ? 'pointer-events-none' : ''
@@ -149,17 +154,19 @@ export function WheatSproutVisualizer({
         }}
       >
         {Array.from({ length: barCount }).map((_, i) => {
-          const h = heights[i] ?? BASE_HEIGHTS[i];
+          const initialH = BASE_HEIGHTS[i % BASE_HEIGHTS.length];
           const w = STALK_WIDTHS[i % STALK_WIDTHS.length];
           const isCentre = i === 3 || i === 4;
 
           return (
             <div
               key={i}
+              ref={(el) => {
+                stalkRefs.current[i] = el;
+              }}
               className="flex flex-col items-center"
               style={{
-                height: `${h}px`,
-                transition: 'height 80ms ease-out',
+                height: `${initialH}px`,
                 willChange: 'height',
               }}
             >
@@ -185,7 +192,7 @@ export function WheatSproutVisualizer({
         })}
       </div>
 
-      {/* Soil Bed Base Bar (Image 1 & Image 3) */}
+      {/* Soil Bed Base Bar */}
       <div
         className="mt-1 h-[8px] w-full max-w-[340px] rounded-full shadow-md"
         style={{

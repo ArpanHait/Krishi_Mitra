@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { type VariantProps, cva } from 'class-variance-authority';
 import { LocalAudioTrack, LocalVideoTrack } from 'livekit-client';
+import { MicIcon } from 'lucide-react';
 import {
   type TrackReferenceOrPlaceholder,
   useMaybeRoomContext,
@@ -163,7 +164,23 @@ function TrackDeviceSelect({
     onActiveDeviceChange?.(deviceId);
   };
 
-  const filteredDevices = useMemo(() => devices.filter((d) => d.deviceId !== ''), [devices]);
+  const filteredDevices = useMemo(() => {
+    return devices.filter((d) => {
+      if (!d.deviceId) return false;
+      if (kind === 'audioinput') {
+        const label = (d.label || '').toLowerCase();
+        // Exclude virtual audio loopbacks like Stereo Mix or Wave Out
+        if (
+          label.includes('stereo mix') ||
+          label.includes('wave out') ||
+          label.includes('what u hear')
+        ) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [devices, kind]);
 
   if (filteredDevices.length < 2) {
     return null;
@@ -181,12 +198,53 @@ function TrackDeviceSelect({
           <SelectValue className="font-mono text-sm" placeholder={`Select a ${kind}`} />
         )}
       </SelectTrigger>
-      <SelectContent position="popper">
-        {filteredDevices.map((device) => (
-          <SelectItem key={device.deviceId} value={device.deviceId} className="font-mono text-xs">
-            {device.label}
-          </SelectItem>
-        ))}
+      <SelectContent
+        position="popper"
+        side="top"
+        align="center"
+        sideOffset={8}
+        className={cn(
+          kind === 'audioinput' &&
+            'z-50 max-w-[340px] min-w-[280px] rounded-xl border border-emerald-500/40 bg-slate-950/95 p-1.5 shadow-2xl backdrop-blur-xl transition-all duration-200'
+        )}
+      >
+        {kind === 'audioinput' && (
+          <div className="flex items-center gap-2 border-b border-emerald-800/40 px-3 py-2 text-xs font-semibold text-emerald-400">
+            <MicIcon className="size-4 text-emerald-400" />
+            <span>Select Microphone / माइक्रोफ़ोन चुनें</span>
+          </div>
+        )}
+        <div className="py-1">
+          {filteredDevices.map((device) => {
+            const isActive = device.deviceId === activeDeviceId;
+            return (
+              <SelectItem
+                key={device.deviceId}
+                value={device.deviceId}
+                className={cn(
+                  'relative my-0.5 cursor-pointer rounded-lg px-3 py-2 text-xs font-medium transition-colors outline-none',
+                  kind === 'audioinput'
+                    ? isActive
+                      ? 'border-l-2 border-emerald-400 bg-emerald-950/60 font-semibold text-emerald-300 shadow-xs'
+                      : 'text-slate-300 hover:bg-emerald-900/30 hover:text-white'
+                    : ''
+                )}
+              >
+                <div className="flex items-center gap-2.5 overflow-hidden">
+                  {kind === 'audioinput' && (
+                    <MicIcon
+                      className={cn(
+                        'size-3.5 shrink-0',
+                        isActive ? 'text-emerald-400' : 'text-slate-500'
+                      )}
+                    />
+                  )}
+                  <span className="truncate">{device.label || 'Default Microphone'}</span>
+                </div>
+              </SelectItem>
+            );
+          })}
+        </div>
       </SelectContent>
     </Select>
   );
