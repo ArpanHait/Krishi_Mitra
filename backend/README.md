@@ -181,7 +181,9 @@ The project includes an eval suite based on the LiveKit Agents [testing framewor
 uv run pytest
 ```
 
-Tests are in [`tests/test_agent.py`](tests/test_agent.py) and use LLM-as-judge evaluations to verify the agent behaves correctly (friendly greetings, grounding, refusing harmful requests).
+Tests are in [`tests/test_agent.py`](tests/test_agent.py) and use LLM-as-judge evaluations to verify the agent behaves correctly (friendly greetings, grounding, refusing harmful requests). Additional unit tests in `test_day5_tools.py`, `test_day6_telephony.py`, `test_memory.py`, and `test_full_memory_flow.py` cover tools, telephony, and memory persistence.
+
+Total: **26 tests — 100% passing**.
 
 To run tests in CI, you'll need to add `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` as repository secrets.
 
@@ -212,9 +214,17 @@ docker run --env-file .env.local murf-voice-agent
 ```
 backend/
 ├── src/
-│   └── agent.py          # Agent entrypoint — pipeline, prompt, config
+│   ├── agent.py           # Agent entrypoint — pipeline, prompt, config
+│   ├── tools.py           # Tools: Weather, Mandi, Call Scheduling, Gist Extraction
+│   ├── db.py              # SQLite farmer profile memory
+│   ├── outbound_dialer.py # Twilio outbound call poller & dialer (Day 6)
+│   └── mandi_rates.json   # Benchmark market fallback rates
 ├── tests/
-│   └── test_agent.py     # LLM-judged eval suite
+│   ├── test_agent.py               # LLM-judged agent behaviour evals
+│   ├── test_day5_tools.py          # Weather & Mandi tool unit tests
+│   ├── test_day6_telephony.py      # Outbound call & confirmation tests (Day 6)
+│   ├── test_memory.py              # SQLite memory & topic gist tests (Day 6)
+│   └── test_full_memory_flow.py    # End-to-end profile persistence test
 ├── .env.example           # Environment variable template
 ├── pyproject.toml         # Python dependencies (uv)
 ├── Dockerfile             # Production container
