@@ -7,12 +7,15 @@
       "jute": { "min_price": 4800, "max_price": 5300, "modal_price": 5050, "market": "Burdwan Mandi", "unit": "Quintal" },
       "mustard": { "min_price": 5200, "max_price": 5600, "modal_price": 5450, "market": "Burdwan Mandi", "unit": "Quintal" },
       "wheat": { "min_price": 2150, "max_price": 2350, "modal_price": 2275, "market": "Burdwan Mandi", "unit": "Quintal" },
-      "maize": { "min_price": 1950, "max_price": 2200, "modal_price": 2090, "market": "Burdwan Mandi", "unit": "Quintal" }
+      "banana": { "min_price": 2100, "max_price": 2600, "modal_price": 2350, "market": "Burdwan Mandi", "unit": "Quintal" },
+      "apple": { "min_price": 6500, "max_price": 8200, "modal_price": 7350, "market": "Burdwan Mandi", "unit": "Quintal" }
     },
     "hooghly": {
       "potato": { "min_price": 1380, "max_price": 1580, "modal_price": 1480, "market": "Tarakeswar Mandi", "unit": "Quintal" },
       "paddy": { "min_price": 2040, "max_price": 2240, "modal_price": 2160, "market": "Kamarpukur Mandi", "unit": "Quintal" },
-      "jute": { "min_price": 4850, "max_price": 5350, "modal_price": 5100, "market": "Hooghly Mandi", "unit": "Quintal" }
+      "jute": { "min_price": 4850, "max_price": 5350, "modal_price": 5100, "market": "Hooghly Mandi", "unit": "Quintal" },
+      "apple": { "min_price": 6600, "max_price": 8400, "modal_price": 7500, "market": "Hooghly Wholesale Fruit Mandi", "unit": "Quintal" },
+      "banana": { "min_price": 2200, "max_price": 2700, "modal_price": 2400, "market": "Hooghly Mandi", "unit": "Quintal" }
     },
     "bankura": {
       "paddy": { "min_price": 2020, "max_price": 2220, "modal_price": 2140, "market": "Bankura Sadar Mandi", "unit": "Quintal" },
@@ -27,7 +30,8 @@
     "kolkata": {
       "rice": { "min_price": 3000, "max_price": 3500, "modal_price": 3250, "market": "Posta Mandi Kolkata", "unit": "Quintal" },
       "potato": { "min_price": 1450, "max_price": 1650, "modal_price": 1550, "market": "Kole Market Kolkata", "unit": "Quintal" },
-      "onion": { "min_price": 1700, "max_price": 2100, "modal_price": 1900, "market": "Posta Mandi Kolkata", "unit": "Quintal" }
+      "onion": { "min_price": 1700, "max_price": 2100, "modal_price": 1900, "market": "Posta Mandi Kolkata", "unit": "Quintal" },
+      "apple": { "min_price": 7000, "max_price": 9000, "modal_price": 7800, "market": "Mechua Fruit Market Kolkata", "unit": "Quintal" }
     }
   },
   "default_benchmarks": {
@@ -39,6 +43,10 @@
     "wheat": { "min_price": 2150, "max_price": 2350, "modal_price": 2275, "market": "Regional APMC Mandi", "unit": "Quintal" },
     "onion": { "min_price": 1600, "max_price": 2000, "modal_price": 1850, "market": "Regional APMC Mandi", "unit": "Quintal" },
     "maize": { "min_price": 1950, "max_price": 2200, "modal_price": 2090, "market": "Regional APMC Mandi", "unit": "Quintal" },
-    "cotton": { "min_price": 6200, "max_price": 6800, "modal_price": 6500, "market": "Regional APMC Mandi", "unit": "Quintal" }
+    "cotton": { "min_price": 6200, "max_price": 6800, "modal_price": 6500, "market": "Regional APMC Mandi", "unit": "Quintal" },
+    "apple": { "min_price": 6500, "max_price": 8500, "modal_price": 7500, "market": "Regional Fruit Mandi", "unit": "Quintal" },
+    "banana": { "min_price": 2200, "max_price": 2800, "modal_price": 2450, "market": "Regional Fruit Mandi", "unit": "Quintal" },
+    "mango": { "min_price": 4500, "max_price": 6000, "modal_price": 5200, "market": "Regional Fruit Mandi", "unit": "Quintal" },
+    "tomato": { "min_price": 1800, "max_price": 2400, "modal_price": 2100, "market": "Regional APMC Mandi", "unit": "Quintal" }
   }
 }

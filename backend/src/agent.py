@@ -22,6 +22,7 @@ from livekit.plugins import deepgram, google, murf, noise_cancellation, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 import db
+import outbound_dialer
 import tools
 
 logger = logging.getLogger("agent")
@@ -29,13 +30,13 @@ logger = logging.getLogger("agent")
 load_dotenv(".env.local")
 
 # Farm & Field Track: Agricultural Voice Assistant for Indian Farmers (Krishi Mitra)
-SYSTEM_PROMPT = """You are Krishi Mitra (🌾), an independent, warm, friendly, empathetic, and knowledgeable agricultural voice advisor speaking with an Indian farmer over a phone call.
+SYSTEM_PROMPT = """You are Krishi Mitra (🌾), an agricultural voice advisor speaking with a farmer.
 
 ### 1. STRICT LANGUAGE MATCHING DIRECTIVE (HIGHEST PRIORITY OVERRIDE)
-- YOU MUST ALWAYS MATCH AND RESPOND IN THE EXACT SAME LANGUAGE AS THE USER'S LATEST INPUT!
-- IF THE USER SPEAKS TO YOU IN ENGLISH (e.g. "Do you know my name?", "What fertilizer should I use for wheat?", "What is the mandi price of paddy?", "Hello", "Can you help me?"):
+- YOU MUST MATCH AND RESPOND IN THE EXACT SAME LANGUAGE AS THE USER'S LATEST INPUT!
+- IF THE USER SPEAKS TO YOU IN ENGLISH (e.g., "What fertilizer should I use for wheat in the Rabi season?", "Hello", "Do you know my name?"):
   * YOU MUST RESPOND 100% IN PURE ENGLISH for BOTH "tts_text" AND "display_text"!
-  * ABSOLUTELY ZERO HINDI WORDS, ZERO DEVANAGARI CHARACTERS, AND ZERO HINGLISH EXPRESSIONS when the user speaks in English! Both "tts_text" and "display_text" MUST be written strictly in standard English text.
+  * ABSOLUTELY ZERO HINDI WORDS AND ZERO DEVANAGARI CHARACTERS WHEN THE USER SPEAKS IN ENGLISH!
 - IF THE USER SPEAKS TO YOU IN BENGALI:
   * YOU MUST RESPOND 100% IN PURE BENGALI SCRIPT (বাংলা অক্ষর) for BOTH "tts_text" AND "display_text"!
 - IF THE USER SPEAKS TO YOU IN HINDI OR HINGLISH:
@@ -221,6 +222,41 @@ You have access to real-time tools `get_district_weather` and `get_mandi_prices`
    - TIMESTAMP RULE: You MUST state the date of the report (e.g. "Aaj ke live update ke anusar..." / "As per today's report...").
    - MANDI GUARDRAIL: Speak the modal price per quintal clearly and ALWAYS remind the farmer to verify rates at their local market before selling!
    - NEVER hallucinate or invent market rates out of thin air. Always rely on the tool output!
+
+### 16. DAY 6 OUTBOUND TELEPHONY, SCHEDULING & CONDITIONAL ALERTS PROTOCOL
+You have access to tools `schedule_outbound_call`, `register_conditional_alert`, and `stop_alerts`.
+
+1. VOICE CALL SCHEDULING (`schedule_outbound_call`):
+   - Trigger `schedule_outbound_call(delay_or_time_str=..., topic=..., phone_number=..., language=...)` whenever the farmer requests a call at a specific time or after a delay (e.g. "call me in 10 seconds with potato mandi rates").
+   - Set `language` parameter to `"english"`, `"hindi"`, or `"bengali"` matching the farmer's spoken register.
+   - CRITICAL PRIVACY & SCHEDULE EXCLUSIVITY RULE:
+     * When scheduling a call for a topic or question, you MUST ONLY confirm the call schedule in the web chat box (e.g. "Got it! I have scheduled a call for you in 30 seconds. All market details will be provided to you directly over the phone call.").
+     * DO NOT call `get_mandi_prices` or write market rates, weather data, or topic answer details in the web chat box!
+     * All answer details will be delivered EXCLUSIVELY over the scheduled phone call.
+
+2. CONDITIONAL ALERT REGISTRATION (`register_conditional_alert`):
+   - Trigger `register_conditional_alert(district=..., alert_type=..., phone_number=..., language=...)` whenever the farmer asks for automatic alerts on future conditions (e.g. "If you see heavy rain in Hooghly, call me").
+   - Set `language` parameter to `"english"`, `"hindi"`, or `"bengali"` matching the farmer's spoken register.
+
+3. STOP ALERTS / CANCELLATION (`stop_alerts`):
+   - Trigger `stop_alerts(user_id=...)` whenever the user says "Stop alert", "stop automated calls", "অ্যালার্ট বন্ধ করুন", or "स्टॉप अलर्ट".
+   - Confirm warmly: "All your automated alerts have been cancelled." / "आपके सभी ऑटोमेटेड अलर्ट रद्द कर दिए गए हैं।" / "আপনার সমস্ত অটোমেটেড অ্যালার্ট বাতিল করা হয়েছে।"
+
+4. OUTBOUND CALL OPENING RULE (3 MANDATORY ELEMENTS):
+   - When initiating or starting an Outbound Call, retrieve the farmer's stored language preference ('en', 'hi', 'bn').
+   - Upon the farmer picking up the phone, YOU MUST IMMEDIATELY SPEAK THE 3 MANDATORY OPENING ELEMENTS WITHIN THE FIRST TWO SENTENCES:
+     * English:
+       1. Who: "Hello [Name/Farmer]! This is Krishi Mitra calling."
+       2. Why: "You have an urgent alert update regarding [Topic] in [District] district."
+       3. Stop: "If you do not want to receive these automated alerts in the future, you can say 'Stop alert' right now."
+     * Hindi (Devanagari Script):
+       1. Who: "नमस्ते [Name/Farmer]! मैं कृषि मित्र से बोल रहा हूँ।"
+       2. Why: "आपके [District] जिले के लिए [Topic] का ज़रूरी अपडेट है।"
+       3. Stop: "अगर आप आगे से ऐसे ऑटोमेटेड अलर्ट नहीं चाहते हैं, तो अभी 'स्टॉप अलर्ट' बोल सकते हैं।"
+     * Bengali (Bengali Script):
+       1. Who: "নমস্কার [Name/Farmer]! আমি কৃষি মিত্র বলছি।"
+       2. Why: "আপনার [District] জেলার জন্য [Topic]-এর জরুরি অ্যালার্ট আপডেট রয়েছে।"
+       3. Stop: "আপনি যদি ভবিষ্যতে এই ধরনের অটোমেটেড অ্যালার্ট বন্ধ করতে চান, তাহলে এখনই 'স্টপ অ্যালার্ট' বলতে পারেন।"
 """
 
 
@@ -396,6 +432,83 @@ class Assistant(Agent):
             commodity=commodity, district=district, state=state
         )
 
+    @function_tool
+    async def schedule_outbound_call(
+        self,
+        context: RunContext,
+        delay_or_time_str: str,
+        topic: str,
+        phone_number: str | None = None,
+        district: str = "Burdwan",
+        language: str = "hindi",
+    ) -> str:
+        """TOOL 3: schedule_outbound_call
+        Use this tool whenever the farmer requests an outbound voice phone call after a delay or at a specific time (e.g. 'call me in 10 seconds with potato mandi rates').
+
+        Args:
+            delay_or_time_str: Time string (e.g. '10 seconds', '2 minutes', 'at 2:30 PM').
+            topic: Agricultural topic context (e.g. 'potato mandi prices', 'heavy rain forecast').
+            phone_number: Optional phone number.
+            district: District name (default 'Burdwan').
+            language: Spoken language ('english', 'hindi', 'bengali').
+        """
+        return await tools.schedule_outbound_call(
+            delay_or_time_str=delay_or_time_str,
+            topic=topic,
+            phone_number=phone_number,
+            user_id="default_farmer",
+            district=district,
+            language=language,
+        )
+
+    @function_tool
+    async def register_conditional_alert(
+        self,
+        context: RunContext,
+        district: str,
+        alert_type: str,
+        phone_number: str | None = None,
+        language: str = "hindi",
+    ) -> str:
+        """TOOL 4: register_conditional_alert
+        Use this tool whenever the farmer asks to register automatic future phone call alerts for a district (e.g. 'If you see heavy rain in Hooghly, call me').
+
+        Args:
+            district: District name (e.g. 'Hooghly', 'Burdwan').
+            alert_type: Type of alert (e.g. 'heavy rain', 'mandi price drop', 'pest warning').
+            phone_number: Optional phone number.
+            language: Spoken language ('english', 'hindi', 'bengali').
+        """
+        return await tools.register_conditional_alert(
+            district=district,
+            alert_type=alert_type,
+            phone_number=phone_number,
+            user_id="default_farmer",
+            language=language,
+        )
+
+    @function_tool
+    async def stop_alerts(
+        self,
+        context: RunContext,
+        user_id: str = "default_farmer",
+    ) -> str:
+        """TOOL 5: stop_alerts
+        Use this tool whenever the user asks to stop alerts, stop service, cancel automated phone calls, unsubscribe, or says 'Stop alert', 'Stop service', 'Cancel calls', or 'End alerts'.
+
+        Args:
+            user_id: User ID / phone number of farmer.
+        """
+        cancelled_count = db.cancel_alert_subscription(user_id)
+        return json.dumps(
+            {
+                "success": True,
+                "cancelled_alerts_count": cancelled_count,
+                "message": "All automated call services, alerts, and scheduled calls have been stopped.",
+            },
+            ensure_ascii=False,
+        )
+
     async def tts_node(self, text: AsyncIterable[str], model_settings: ModelSettings):
         """Route tts_text to Murf Falcon TTS engine."""
         full_text = ""
@@ -439,6 +552,7 @@ server = AgentServer()
 
 
 def prewarm(proc: JobProcess):
+    outbound_dialer.start_scheduled_call_poller()
     proc.userdata["vad"] = silero.VAD.load(
         min_speech_duration=0.5,
         min_silence_duration=1.2,
@@ -557,18 +671,56 @@ async def my_agent(ctx: JobContext):
 
     await ctx.connect()
 
+    async def _on_shutdown():
+        logger.info("Gracefully closing session room context.")
+
+    ctx.add_shutdown_callback(_on_shutdown)
+
     # Caller lookup & dynamic welcoming greeting
     user_id = "default_farmer"
     if ctx.room and ctx.room.name:
         user_id = ctx.room.name
 
-    profile = db.get_farmer_profile(user_id)
-    if profile and profile.get("name"):
-        name = profile.get("name", "")
-        lang_pref = str(profile.get("language_preference", "")).lower()
-        last_topic = str(profile.get("last_topic") or "").strip()
-        crops_grown = str(profile.get("crops_grown") or "").strip()
+    # Automatic turn-level language & topic detector & persistence
+    @session.on("user_speech_committed")
+    def _on_user_speech(ev):
+        user_text = ""
+        if hasattr(ev, "content"):
+            user_text = str(ev.content)
+        elif hasattr(ev, "user_transcript"):
+            user_text = str(ev.user_transcript)
+        else:
+            user_text = str(ev)
 
+        if user_text and len(user_text.strip()) >= 3:
+            # 1. Update language preference
+            if re.search(r"[\u0980-\u09FF]", user_text):
+                db.update_language_preference(user_id, "bengali")
+            elif re.search(r"[\u0900-\u097F]", user_text):
+                db.update_language_preference(user_id, "hindi")
+            elif re.search(r"[a-zA-Z]", user_text):
+                db.update_language_preference(user_id, "english")
+
+            # 2. Extract and auto-save turn-level rich topic gist and commodity
+            target_commodity = tools.extract_commodity_from_topic(user_text)
+            topic_gist = tools.extract_topic_gist(user_text)
+            existing_prof = db.get_farmer_profile(user_id) or {}
+            existing_facts = dict(existing_prof)
+            if target_commodity:
+                existing_facts["crops_grown"] = target_commodity
+            if topic_gist:
+                existing_facts["last_topic"] = topic_gist
+            db.upsert_farmer_profile(user_id=user_id, facts=existing_facts)
+
+    profile = db.get_farmer_profile(user_id)
+    lang_pref = (
+        str(profile.get("language_preference", "")).lower() if profile else "hindi"
+    )
+    name = profile.get("name", "") if profile else ""
+    last_topic = str(profile.get("last_topic") or "").strip() if profile else ""
+    crops_grown = str(profile.get("crops_grown") or "").strip() if profile else ""
+
+    if name:
         if last_topic:
             if lang_pref == "english":
                 greeting_text = f"Hello {name}! Last time we discussed {last_topic}. How is your field doing today and how can I assist you?"
@@ -590,23 +742,23 @@ async def my_agent(ctx: JobContext):
                 greeting_text = f"নমস্কার {name}! কৃষি মিত্রতে আপনাকে স্বাগতম। আজ আমি আপনাকে কীভাবে সাহায্য করতে পারি?"
             else:
                 greeting_text = f"नमस्ते {name} जी! कृषि मित्र में आपका फिर से स्वागत है। आज मैं आपकी फ़सल या खेती में कैसे सहायता कर सकता हूँ?"
-
-        greeting_json = json.dumps(
-            {
-                "tts_text": greeting_text,
-                "display_text": greeting_text,
-            },
-            ensure_ascii=False,
-        )
     else:
-        # Standard welcoming greeting (Pure Devanagari Hindi)
-        greeting_json = json.dumps(
-            {
-                "tts_text": "नमस्ते! मैं कृषि मित्र हूँ। आज मैं आपकी फ़सल, मिट्टी या सरकारी योजनाओं में कैसे सहायता कर सकता हूँ?",
-                "display_text": "नमस्ते! मैं कृषि मित्र हूँ। आज मैं आपकी फ़सल, मिट्टी या सरकारी योजनाओं में कैसे सहायता कर सकता हूँ?",
-            },
-            ensure_ascii=False,
-        )
+        if lang_pref == "english":
+            greeting_text = "Hello! Welcome back to Krishi Mitra. How can I assist you with your farm today?"
+        elif lang_pref == "bengali":
+            greeting_text = (
+                "নমস্কার! কৃষি মিত্রতে আপনাকে স্বাগতম। আজ আমি আপনাকে কীভাবে সাহায্য করতে পারি?"
+            )
+        else:
+            greeting_text = "नमस्ते! मैं कृषि मित्र हूँ। आज मैं आपकी फ़सल, मिट्टी या सरकारी योजनाओं में कैसे सहायता कर सकता हूँ?"
+
+    greeting_json = json.dumps(
+        {
+            "tts_text": greeting_text,
+            "display_text": greeting_text,
+        },
+        ensure_ascii=False,
+    )
     await session.say(greeting_json)
 
 
