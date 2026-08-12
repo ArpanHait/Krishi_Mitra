@@ -658,12 +658,6 @@ server = AgentServer()
 
 
 def prewarm(proc: JobProcess):
-    import api_server
-    import email_listener
-
-    outbound_dialer.start_scheduled_call_poller()
-    email_listener.start_poller_thread(interval_seconds=30)
-    api_server.start_api_server_thread(port=8080)
     proc.userdata["vad"] = silero.VAD.load(
         min_speech_duration=0.5,
         min_silence_duration=1.2,
@@ -834,7 +828,7 @@ async def my_agent(ctx: JobContext):
     if name:
         if last_topic:
             if lang_pref == "english":
-                greeting_text = f"Hello {name}! Last time we discussed {last_topic}. How is your field doing today and how can I assist you?"
+                greeting_text = f"Hello {name}! Last time we discussed about {last_topic}. How is your field doing today and how can I assist you?"
             elif lang_pref == "bengali":
                 greeting_text = f"নমস্কার {name}! গতবার আমরা {last_topic} নিয়ে কথা বলেছিলাম। আজ আপনার ফসল কেমন আছে এবং আমি আপনাকে কীভাবে সাহায্য করতে পারি?"
             else:
@@ -874,4 +868,10 @@ async def my_agent(ctx: JobContext):
 
 
 if __name__ == "__main__":
+    import api_server
+    import email_listener
+
+    outbound_dialer.start_scheduled_call_poller()
+    email_listener.start_poller_process(interval_seconds=30)
+    api_server.start_api_server_process(port=8080)
     cli.run_app(server)

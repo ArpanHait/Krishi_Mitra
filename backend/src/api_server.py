@@ -121,14 +121,51 @@ def start_api_server_thread(host: str = "0.0.0.0", port: int = 8080) -> None:
         app = create_app()
         runner = web.AppRunner(app)
         loop.run_until_complete(runner.setup())
-        site = web.TCPSite(runner, host, port)
-        loop.run_until_complete(site.start())
-        print(
-            f"🌐 [REST API Server]: Listening for HTTP requests at http://{host}:{port}",
-            flush=True,
-        )
-        logger.info(f"REST API Server running at http://{host}:{port}")
-        loop.run_forever()
+        try:
+            site = web.TCPSite(runner, host, port)
+            loop.run_until_complete(site.start())
+            print(
+                f"🌐 [REST API Server]: Listening for HTTP requests at http://{host}:{port}",
+                flush=True,
+            )
+            logger.info(f"REST API Server running at http://{host}:{port}")
+            loop.run_forever()
+        except OSError:
+            print(
+                f"🌐 [REST API Server]: Port {port} is already active.",
+                flush=True,
+            )
 
     t = threading.Thread(target=_run, daemon=True, name="api_server_thread")
     t.start()
+
+
+def start_api_server_process(
+    host: str = "0.0.0.0", port: int = 8080
+) -> multiprocessing.Process:
+    """Starts the aiohttp REST API server in an isolated background Process."""
+
+    def _worker():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        app = create_app()
+        runner = web.AppRunner(app)
+        loop.run_until_complete(runner.setup())
+        try:
+            site = web.TCPSite(runner, host, port)
+            loop.run_until_complete(site.start())
+            print(
+                f"🌐 [REST API Server]: Listening for HTTP requests at http://{host}:{port}",
+                flush=True,
+            )
+            logger.info(f"REST API Server running at http://{host}:{port}")
+            loop.run_forever()
+        except OSError:
+            print(
+                f"🌐 [REST API Server]: Port {port} is already active.",
+                flush=True,
+            )
+
+    p = multiprocessing.Process(target=_worker, daemon=True, name="api_server_process")
+    p.start()
+    return p
