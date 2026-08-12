@@ -11,6 +11,7 @@ import {
   AgentTrackToggle,
   agentTrackToggleVariants,
 } from '@/components/agents-ui/agent-track-toggle';
+import { TicketDashboard } from '@/components/app/ticket-dashboard';
 import { Button } from '@/components/ui/button';
 import { Toggle } from '@/components/ui/toggle';
 import {
@@ -377,6 +378,9 @@ export function AgentControlBar({
               <MessageSquareTextIcon />
             </Toggle>
           )}
+
+          {/* Ticket Dashboard Badge Button (Right beside chat icon) */}
+          <TicketDashboard buttonStyle="icon-only" />
         </div>
 
         {/* Disconnect */}

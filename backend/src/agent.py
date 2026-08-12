@@ -257,6 +257,37 @@ You have access to tools `schedule_outbound_call`, `register_conditional_alert`,
        1. Who: "নমস্কার [Name/Farmer]! আমি কৃষি মিত্র বলছি।"
        2. Why: "আপনার [District] জেলার জন্য [Topic]-এর জরুরি অ্যালার্ট আপডেট রয়েছে।"
        3. Stop: "আপনি যদি ভবিষ্যতে এই ধরনের অটোমেটেড অ্যালার্ট বন্ধ করতে চান, তাহলে এখনই 'স্টপ অ্যালার্ট' বলতে পারেন।"
+
+### 17. DAY 7 HUMAN ESCALATION, TICKET STATUS & COMFORTING FIRST-AID PROTOCOL
+You have access to tools `create_escalation` and `check_ticket_status`.
+
+0. TICKET STATUS INQUIRY MANDATE:
+   - When the farmer asks if the support officer replied or asks for ticket status (e.g. "Did the support officer reply?", "What is the status of my ticket?", "Check my last ticket"):
+     * Call `check_ticket_status(farmer_name=...)` immediately! NEVER say you don't have real-time access.
+     * IF `has_officer_replied` is true: Read out the officer's response text warmly to the farmer.
+     * IF `has_officer_replied` is false / status is OPEN: Inform the farmer warmly: "Your ticket #[ticket_id] is active and currently being reviewed by our agricultural officer. They will reply shortly." 
+
+1. ESCALATION TRIGGERS:
+   - TRIGGER A (DATA MISSING/OUTDATED): Mandi market prices or weather forecasts are unavailable or stale.
+   - TRIGGER B (SERIOUS CROP CRISIS): Severe pest outbreaks, unexpected disease infections, high crop failure risks, or complex farming issues requiring expert intervention.
+   - TRIGGER C (EXPLICIT USER REQUEST): The user explicitly asks to raise a ticket, contact support, or create an escalation (e.g., "raise a ticket", "create a support ticket", "contact support officer").
+
+2. IMMEDIATE COMFORT & FIRST-AID ADVICE MANDATE:
+   - When a farmer reports a severe crop issue or asks for an escalation ticket, ALWAYS provide 1 concise, comforting, immediate first-aid step (e.g. "For aphids, you can wash them off with a strong water jet or spray neem oil solution.") so the farmer feels comforted and supported immediately while waiting for officer follow-up.
+
+3. EXPLICIT & CONDITIONAL TICKET CREATION PROTOCOL:
+   - IF THE USER EXPLICITLY ASKS TO RAISE/CREATE A TICKET (e.g., "raise a ticket about pesticides", "support officer", "ticket create kar do"):
+     * Immediately call `create_escalation(farmer_name=..., topic=..., summary=..., urgency=..., language=..., preferred_followup=...)`.
+     * State out loud warmly with ticket confirmation and comforting next steps:
+       - English: "I am creating an urgent support ticket for our agricultural officer. In the meantime, as an immediate solution you can spray neem oil mixed with water. The officer will contact you shortly."
+       - Hindi: "मैं हमारे कृषि अधिकारी के लिए तुरंत एक सहायता टिकट बना रहा हूँ। इस बीच, आप नीम के तेल और पानी का छिड़काव कर सकते हैं। अधिकारी जल्द ही आपसे संपर्क करेंगे।"
+       - Bengali: "আমি আমাদের কৃষি কর্মকর্তার জন্য একটি জরুরি সহায়তা টিকিট তৈরি করছি। এই সময়ে আপনি জলের সাথে নিম তেল মিশিয়ে স্প্রে করতে পারেন। কর্মকর্তা শীঘ্রই আপনার সাথে যোগাযোগ করবেন।"
+   - IF PROPOSING ESCALATION (TRIGGER A or B without explicit user command):
+     * Ask for permission out loud: "This crop issue requires expert review. Would you like me to create a support ticket and notify our agricultural officer to contact you?"
+   - IF USER AGREES ("yes", "sure", "ha", "haan", "haan kar do", "thik ache"):
+     * Call `create_escalation(...)` and speak the created ticket confirmation warmly.
+   - IF USER REFUSES ("no", "na", "nahi", "don't create"):
+     * Do NOT call `create_escalation`. Continue conversation normally.
 """
 
 
@@ -509,6 +540,73 @@ class Assistant(Agent):
             ensure_ascii=False,
         )
 
+    @function_tool
+    async def create_escalation(
+        self,
+        context: RunContext,
+        farmer_name: str,
+        topic: str,
+        summary: str,
+        urgency: str = "Medium",
+        language: str = "english",
+        preferred_followup: str = "Phone Call",
+    ) -> str:
+        """TOOL 6: create_escalation
+        Use this tool ONLY AFTER asking explicit user permission to create a support ticket / escalation for missing data, crop disease crisis, or complex issues.
+
+        Args:
+            farmer_name: Name of the farmer.
+            topic: Crop or topic needing escalation (e.g. Potato late blight disease).
+            summary: Detailed summary of the issue (will be privacy-sanitized automatically).
+            urgency: Urgency level ('Low', 'Medium', 'High', 'Emergency').
+            language: Spoken language ('english', 'hindi', 'bengali').
+            preferred_followup: Preferred followup method ('Phone Call', 'WhatsApp', 'Visit').
+        """
+        return await tools.create_escalation(
+            farmer_name=farmer_name,
+            topic=topic,
+            summary=summary,
+            urgency=urgency,
+            language=language,
+            preferred_followup=preferred_followup,
+        )
+
+    @function_tool
+    async def check_ticket_status(
+        self,
+        context: RunContext,
+        farmer_name: str = "Arpan",
+    ) -> str:
+        """TOOL 7: check_ticket_status
+        Use this tool whenever the farmer asks if the support officer has replied, asks for the status of their ticket, or asks 'Did the support officer reply to my ticket?'.
+
+        Args:
+            farmer_name: Name of the farmer.
+        """
+        ticket = db.get_latest_escalation(farmer_name)
+        if not ticket:
+            return json.dumps(
+                {
+                    "found": False,
+                    "message": "No escalation tickets found in database for this farmer.",
+                },
+                ensure_ascii=False,
+            )
+
+        return json.dumps(
+            {
+                "found": True,
+                "ticket_id": ticket["ticket_id"],
+                "topic": ticket["topic"],
+                "status": ticket["status"],
+                "officer_response": ticket.get("officer_response"),
+                "has_officer_replied": ticket["status"] == "OFFICER_REPLIED"
+                or bool(ticket.get("officer_response")),
+                "created_at": ticket["created_at"],
+            },
+            ensure_ascii=False,
+        )
+
     async def tts_node(self, text: AsyncIterable[str], model_settings: ModelSettings):
         """Route tts_text to Murf Falcon TTS engine."""
         full_text = ""
@@ -520,8 +618,16 @@ class Assistant(Agent):
 
         tts_text, _ = parse_llm_json(full_text)
 
+        # Split long tts_text into smaller sentence chunks so Murf TTS streaming WebSocket never times out
+        sentences = [
+            s.strip() for s in re.split(r"(?<=[.!?])\s+|\n+", tts_text) if s.strip()
+        ]
+        if not sentences:
+            sentences = [tts_text]
+
         async def _tts_stream():
-            yield tts_text
+            for sentence in sentences:
+                yield sentence + " "
 
         async for frame in Agent.default.tts_node(self, _tts_stream(), model_settings):
             yield frame
@@ -552,7 +658,10 @@ server = AgentServer()
 
 
 def prewarm(proc: JobProcess):
+    import email_listener
+
     outbound_dialer.start_scheduled_call_poller()
+    email_listener.start_poller_thread(interval_seconds=30)
     proc.userdata["vad"] = silero.VAD.load(
         min_speech_duration=0.5,
         min_silence_duration=1.2,

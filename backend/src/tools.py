@@ -4,9 +4,14 @@ import json
 import logging
 import os
 import re
+import smtplib
+import uuid
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from pathlib import Path
 
 import httpx
+from livekit.agents import function_tool
 
 import db
 import outbound_dialer
@@ -477,3 +482,125 @@ async def register_conditional_alert(
         f"आपका {dist_clean} जिले के लिए {alert_clean} रजिस्टर्ड हो गया है। "
         f"कोई भी नया अलर्ट मिलते ही मैं आपको फोन कॉल कर दूंगा।"
     )
+
+
+def sanitize_summary(text: str) -> str:
+    """Strips out sensitive private information like OTPs, Passwords, Aadhaar/Government IDs, and Credit/Debit card numbers."""
+    if not text:
+        return ""
+    # Aadhaar / 12-digit IDs
+    clean = re.sub(r"\b\d{4}[-\s]?\d{4}[-\s]?\d{4}\b", "[REDACTED_AADHAAR]", text)
+    # OTP / PIN / Password key-value pairs
+    clean = re.sub(
+        r"\b(otp|pin|password)\s*[:=]?\s*\d+\b",
+        "[REDACTED_SENSITIVE]",
+        clean,
+        flags=re.IGNORECASE,
+    )
+    # General 4-6 digit numeric codes
+    clean = re.sub(r"\b\d{4,6}\b", "[REDACTED_NUMERIC]", clean)
+    return clean
+
+
+def send_email_alert(
+    ticket_id: str, farmer_name: str, topic: str, urgency: str, summary: str
+) -> bool:
+    """Sends an email notification to the human support officer using standard SMTP."""
+    sender_email = os.getenv("SMTP_SENDER_EMAIL")
+    sender_password = os.getenv("SMTP_SENDER_PASSWORD")
+    recipient_email = os.getenv("SUPPORT_OFFICER_EMAIL", sender_email)
+
+    if not sender_email or not sender_password:
+        logger.info("SMTP credentials missing; skipping email dispatch.")
+        return False
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"🚨 [{urgency} ESCALATION] Ticket #{ticket_id}: {topic}"
+    msg["From"] = sender_email
+    msg["To"] = recipient_email
+
+    urgency_color = (
+        "red"
+        if urgency in ("Emergency", "High")
+        else "orange"
+        if urgency == "Medium"
+        else "green"
+    )
+
+    html_content = f"""
+    <h2>Krishi Mitra - Human Escalation Request</h2>
+    <p><b>Ticket ID:</b> {ticket_id}</p>
+    <p><b>Farmer Name:</b> {farmer_name}</p>
+    <p><b>Urgency:</b> <span style="color:{urgency_color};"><b>{urgency}</b></span></p>
+    <p><b>Topic:</b> {topic}</p>
+    <hr/>
+    <h3>Sanitized Issue Summary:</h3>
+    <p>{summary}</p>
+    <hr/>
+    <p><i>Action required: Please review this open request in your dashboard.</i></p>
+    """
+    msg.attach(MIMEText(html_content, "html"))
+
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(sender_email, sender_password)
+            server.sendmail(sender_email, recipient_email, msg.as_string())
+        logger.info(f"Successfully sent email alert for ticket #{ticket_id}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send email alert for ticket #{ticket_id}: {e}")
+        return False
+
+
+@function_tool
+async def create_escalation(
+    farmer_name: str,
+    topic: str,
+    summary: str,
+    urgency: str = "Medium",
+    language: str = "english",
+    preferred_followup: str = "Phone Call",
+) -> str:
+    """Creates an escalation request. Checks for open duplicates first.
+
+    Redacts sensitive info, saves to SQLite database, dispatches an email, and returns the Ticket ID.
+    """
+    clean_summary = sanitize_summary(summary)
+    urgency_norm = urgency.strip().capitalize() if urgency else "Medium"
+    if urgency_norm not in ("Low", "Medium", "High", "Emergency"):
+        urgency_norm = "Medium"
+
+    # Check for existing OPEN duplicate ticket for the same farmer and topic
+    existing_ticket = db.get_open_duplicate_escalation(
+        farmer_name, topic, db_path=db.DB_PATH
+    )
+
+    if existing_ticket:
+        ticket_id = existing_ticket["ticket_id"]
+        existing_summary = existing_ticket.get("summary") or ""
+        updated_summary = f"{existing_summary}\n\n[UPDATE]: {clean_summary}".strip()
+        db.update_escalation_summary_and_urgency(
+            ticket_id, updated_summary, urgency_norm, db_path=db.DB_PATH
+        )
+        send_email_alert(
+            ticket_id, farmer_name, f"{topic} (UPDATED)", urgency_norm, updated_summary
+        )
+        return f"Existing open ticket #{ticket_id} updated with new details."
+
+    # Create new ticket
+    ticket_id = f"KM-{uuid.uuid4().hex[:6].upper()}"
+    db.create_escalation_record(
+        ticket_id=ticket_id,
+        farmer_name=farmer_name,
+        topic=topic,
+        summary=clean_summary,
+        urgency=urgency_norm,
+        language=language,
+        preferred_followup=preferred_followup,
+        db_path=db.DB_PATH,
+    )
+
+    # Send Email Alert to Human Officer
+    send_email_alert(ticket_id, farmer_name, topic, urgency_norm, clean_summary)
+
+    return f"Ticket created successfully under ID: #{ticket_id}"

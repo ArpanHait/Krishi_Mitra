@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { TicketDashboard } from '@/components/app/ticket-dashboard';
 
 interface AppHeaderProps {
   hidden?: boolean;
@@ -42,8 +43,10 @@ export function AppHeader({ hidden = false, className = '' }: AppHeaderProps) {
           </div>
         </div>
 
-        {/* Right: Language Selector Pills */}
-        <div className="flex items-center gap-2">
+        {/* Right: Language Selector Pills & Ticket Dashboard */}
+        <div className="flex items-center gap-3">
+          <TicketDashboard buttonStyle="header-button" />
+
           <div className="flex rounded-xl border border-white/15 bg-black/40 p-1 text-xs">
             <button
               onClick={() => setSelectedLang('hinglish')}

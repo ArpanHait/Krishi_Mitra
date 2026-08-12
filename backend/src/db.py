@@ -64,6 +64,78 @@ def init_db(db_path: Path | str = DB_PATH) -> None:
             )
             """
         )
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS escalations (
+                ticket_id TEXT PRIMARY KEY,
+                farmer_name TEXT,
+                topic TEXT,
+                summary TEXT,
+                urgency TEXT CHECK(urgency IN ('Low', 'Medium', 'High', 'Emergency')),
+                status TEXT DEFAULT 'OPEN',
+                language TEXT,
+                preferred_followup TEXT,
+                officer_response TEXT DEFAULT NULL,
+                has_unread_reply INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        cursor.execute("PRAGMA table_info(escalations)")
+        escalation_cols = [row[1] for row in cursor.fetchall()]
+        if "officer_response" not in escalation_cols:
+            cursor.execute(
+                "ALTER TABLE escalations ADD COLUMN officer_response TEXT DEFAULT NULL"
+            )
+        if "has_unread_reply" not in escalation_cols:
+            cursor.execute(
+                "ALTER TABLE escalations ADD COLUMN has_unread_reply INTEGER DEFAULT 0"
+            )
+
+        # Migrate existing table if old CHECK(status IN...) constraint exists
+        cursor.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='escalations'"
+        )
+        tbl_row = cursor.fetchone()
+        if tbl_row and tbl_row[0] and "CHECK(status IN" in tbl_row[0]:
+            cursor.execute(
+                """
+                CREATE TABLE escalations_new (
+                    ticket_id TEXT PRIMARY KEY,
+                    farmer_name TEXT,
+                    topic TEXT,
+                    summary TEXT,
+                    urgency TEXT CHECK(urgency IN ('Low', 'Medium', 'High', 'Emergency')),
+                    status TEXT DEFAULT 'OPEN',
+                    language TEXT,
+                    preferred_followup TEXT,
+                    officer_response TEXT DEFAULT NULL,
+                    has_unread_reply INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            cursor.execute(
+                """
+                INSERT INTO escalations_new (
+                    ticket_id, farmer_name, topic, summary, urgency, status,
+                    language, preferred_followup, officer_response, has_unread_reply,
+                    created_at, updated_at
+                )
+                SELECT ticket_id, farmer_name, topic, summary, urgency, status,
+                       language, preferred_followup, officer_response, has_unread_reply,
+                       created_at, updated_at
+                FROM escalations
+                """
+            )
+            cursor.execute("DROP TABLE escalations")
+            cursor.execute("ALTER TABLE escalations_new RENAME TO escalations")
+            logger.info(
+                "Migrated escalations table schema to allow OFFICER_REPLIED status."
+            )
+
         conn.commit()
     logger.info("Initialized krishi_memory.db tables successfully.")
 
@@ -446,3 +518,212 @@ def mark_scheduled_call_completed(
             (status, call_id),
         )
         conn.commit()
+
+
+def create_escalation_record(
+    ticket_id: str,
+    farmer_name: str,
+    topic: str,
+    summary: str,
+    urgency: str,
+    language: str,
+    preferred_followup: str = "Phone Call",
+    db_path: Path | str = DB_PATH,
+) -> None:
+    """Insert a new escalation ticket into SQLite escalations table."""
+    init_db(db_path)
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO escalations (ticket_id, farmer_name, topic, summary, urgency, status, language, preferred_followup, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?)
+            """,
+            (
+                ticket_id,
+                farmer_name,
+                topic,
+                summary,
+                urgency,
+                language,
+                preferred_followup,
+                now,
+                now,
+            ),
+        )
+        conn.commit()
+    prune_old_resolved_tickets(limit=3, db_path=db_path)
+
+
+def get_open_duplicate_escalation(
+    farmer_name: str,
+    topic: str,
+    db_path: Path | str = DB_PATH,
+) -> dict[str, Any] | None:
+    """Check for an existing OPEN duplicate ticket for the same farmer and topic."""
+    init_db(db_path)
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM escalations WHERE farmer_name = ? AND topic = ? AND status = 'OPEN'",
+            (farmer_name, topic),
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def update_escalation_summary_and_urgency(
+    ticket_id: str,
+    new_summary: str,
+    urgency: str,
+    db_path: Path | str = DB_PATH,
+) -> None:
+    """Update summary, urgency, and updated_at timestamp for an existing ticket."""
+    init_db(db_path)
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE escalations SET summary = ?, urgency = ?, updated_at = ? WHERE ticket_id = ?",
+            (new_summary, urgency, now, ticket_id),
+        )
+        conn.commit()
+
+
+def get_all_escalations(db_path: Path | str = DB_PATH) -> list[dict[str, Any]]:
+    """Retrieve all escalation tickets sorted by created_at DESC."""
+    init_db(db_path)
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM escalations ORDER BY created_at DESC")
+        rows = cursor.fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_pending_escalations_count(db_path: Path | str = DB_PATH) -> int:
+    """Retrieve count of tickets with status = 'OPEN'."""
+    init_db(db_path)
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM escalations WHERE status = 'OPEN'")
+        return cursor.fetchone()[0]
+
+
+def update_escalation_status(
+    ticket_id: str,
+    status: str,
+    db_path: Path | str = DB_PATH,
+) -> bool:
+    """Update ticket status (e.g. OPEN to RESOLVED). Returns True if updated."""
+    init_db(db_path)
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE escalations SET status = ?, updated_at = ? WHERE ticket_id = ?",
+            (status, now, ticket_id),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def prune_old_resolved_tickets(limit: int = 3, db_path: Path | str = DB_PATH) -> int:
+    """Retains at most limit resolved tickets by deleting the oldest ones based on updated_at timestamp."""
+    init_db(db_path)
+    query = """
+    DELETE FROM escalations 
+    WHERE status = 'RESOLVED' 
+    AND ticket_id NOT IN (
+        SELECT ticket_id FROM escalations 
+        WHERE status = 'RESOLVED' 
+        ORDER BY updated_at DESC 
+        LIMIT ?
+    )
+    """
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(query, (limit,))
+        conn.commit()
+        return cursor.rowcount
+
+
+def update_officer_reply(
+    ticket_id: str,
+    reply_text: str,
+    db_path: Path | str = DB_PATH,
+) -> bool:
+    """Update ticket with officer's response text and mark status as OFFICER_REPLIED and has_unread_reply = 1."""
+    init_db(db_path)
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        # Check current status & officer response first to prevent duplicate re-triggers
+        cursor.execute(
+            "SELECT status, officer_response FROM escalations WHERE ticket_id = ?",
+            (ticket_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return False
+
+        current_status = row[0]
+        current_response = row[1]
+
+        # 1. Do NOT re-open or modify tickets that the user has already marked as RESOLVED
+        if current_status == "RESOLVED":
+            return False
+
+        # 2. Do NOT re-trigger unread status if officer_response is already identical and status is OFFICER_REPLIED
+        if current_response == reply_text and current_status == "OFFICER_REPLIED":
+            return False
+
+        cursor.execute(
+            """
+            UPDATE escalations 
+            SET officer_response = ?, status = 'OFFICER_REPLIED', has_unread_reply = 1, updated_at = ?
+            WHERE ticket_id = ?
+            """,
+            (reply_text, now, ticket_id),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def mark_reply_read(ticket_id: str, db_path: Path | str = DB_PATH) -> bool:
+    """Clear unread reply flag for a given ticket_id."""
+    init_db(db_path)
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE escalations SET has_unread_reply = 0 WHERE ticket_id = ?",
+            (ticket_id,),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def resolve_ticket(ticket_id: str, db_path: Path | str = DB_PATH) -> bool:
+    """Mark ticket status as RESOLVED and run auto-pruning for old resolved tickets beyond limit 3."""
+    updated = update_escalation_status(ticket_id, "RESOLVED", db_path=db_path)
+    if updated:
+        prune_old_resolved_tickets(limit=3, db_path=db_path)
+    return updated
+
+
+def get_latest_escalation(
+    farmer_name: str | None = None, db_path: Path | str = DB_PATH
+) -> dict[str, Any] | None:
+    """Retrieve the most recent escalation ticket for a farmer or overall."""
+    init_db(db_path)
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        if farmer_name:
+            cursor.execute(
+                "SELECT * FROM escalations WHERE LOWER(farmer_name) LIKE ? ORDER BY created_at DESC LIMIT 1",
+                (f"%{farmer_name.lower()}%",),
+            )
+        else:
+            cursor.execute("SELECT * FROM escalations ORDER BY created_at DESC LIMIT 1")
+        row = cursor.fetchone()
+        return dict(row) if row else None
