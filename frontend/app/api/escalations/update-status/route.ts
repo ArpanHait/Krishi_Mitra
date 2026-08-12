@@ -24,7 +24,11 @@ export async function POST(req: Request) {
     try {
       const res = await fetch(`${backendUrl.replace(/\/$/, '')}/api/escalations/update-status`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Bypass-Tunnel-Reminder': 'true',
+          'User-Agent': 'Mozilla/5.0',
+        },
         body: JSON.stringify({ ticket_id, status }),
       });
       const data = await res.json();

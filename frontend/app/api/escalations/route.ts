@@ -33,6 +33,10 @@ export async function GET() {
     try {
       const res = await fetch(`${backendUrl.replace(/\/$/, '')}/api/escalations`, {
         cache: 'no-store',
+        headers: {
+          'Bypass-Tunnel-Reminder': 'true',
+          'User-Agent': 'Mozilla/5.0',
+        },
       });
       const data = await res.json();
       return NextResponse.json(data);
