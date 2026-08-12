@@ -27,6 +27,21 @@ function getDb() {
 }
 
 export async function GET() {
+  const backendUrl = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_BACKEND_API_URL;
+
+  if (backendUrl) {
+    try {
+      const res = await fetch(`${backendUrl.replace(/\/$/, '')}/api/escalations/pending-count`, {
+        cache: 'no-store',
+      });
+      const data = await res.json();
+      return NextResponse.json(data);
+    } catch (error) {
+      console.error('Error fetching pending count from backend REST API:', error);
+      return NextResponse.json({ count: 0, has_unread_replies: false, unread_count: 0 });
+    }
+  }
+
   try {
     const db = getDb();
     const openQuery = db.prepare("SELECT COUNT(*) as count FROM escalations WHERE status = 'OPEN'");

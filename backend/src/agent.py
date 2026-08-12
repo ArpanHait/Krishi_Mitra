@@ -658,10 +658,12 @@ server = AgentServer()
 
 
 def prewarm(proc: JobProcess):
+    import api_server
     import email_listener
 
     outbound_dialer.start_scheduled_call_poller()
     email_listener.start_poller_thread(interval_seconds=30)
+    api_server.start_api_server_thread(port=8080)
     proc.userdata["vad"] = silero.VAD.load(
         min_speech_duration=0.5,
         min_silence_duration=1.2,

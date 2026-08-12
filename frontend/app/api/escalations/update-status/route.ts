@@ -11,14 +11,31 @@ function getDb() {
 }
 
 export async function POST(req: Request) {
-  try {
-    const body = await req.json();
-    const { ticket_id, status } = body;
+  const body = await req.json();
+  const { ticket_id, status } = body;
 
-    if (!ticket_id || !status) {
-      return NextResponse.json({ error: 'Missing ticket_id or status' }, { status: 400 });
+  if (!ticket_id || !status) {
+    return NextResponse.json({ error: 'Missing ticket_id or status' }, { status: 400 });
+  }
+
+  const backendUrl = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_BACKEND_API_URL;
+
+  if (backendUrl) {
+    try {
+      const res = await fetch(`${backendUrl.replace(/\/$/, '')}/api/escalations/update-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticket_id, status }),
+      });
+      const data = await res.json();
+      return NextResponse.json(data);
+    } catch (error) {
+      console.error('Error posting update-status to backend REST API:', error);
+      return NextResponse.json({ error: 'Failed to update backend' }, { status: 500 });
     }
+  }
 
+  try {
     const db = getDb();
     const now = new Date().toISOString();
     const statement = db.prepare(
