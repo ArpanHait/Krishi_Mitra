@@ -1,11 +1,11 @@
 import asyncio
 import email
+from email.header import decode_header
 import imaplib
 import logging
 import multiprocessing
 import os
 import re
-from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -19,48 +19,48 @@ load_dotenv(".env.local")
 load_dotenv(".env")
 
 
+def decode_mime_header(header_value: str) -> str:
+    """Decodes MIME encoded-word headers (e.g. Base64 or Quoted-Printable) into plain UTF-8 text."""
+    if not header_value:
+        return ""
+    try:
+        parts = []
+        for text, encoding in decode_header(header_value):
+            if isinstance(text, bytes):
+                parts.append(text.decode(encoding or "utf-8", errors="ignore"))
+            else:
+                parts.append(str(text))
+        return " ".join(parts)
+    except Exception:
+        return str(header_value)
+
+
 async def check_support_replies(db_path: Path | str = db.DB_PATH) -> None:
-    """Checks IMAP inbox for replies from support officer containing Ticket IDs."""
+    """Checks IMAP inbox silently for replies from support officer containing Ticket IDs."""
     sender_email = os.getenv("SMTP_SENDER_EMAIL")
     sender_password = os.getenv("SMTP_SENDER_PASSWORD")
 
     if not sender_email or not sender_password:
         msg = "[IMAP Poller]: Missing SMTP_SENDER_EMAIL or SMTP_SENDER_PASSWORD in environment."
         logger.warning(msg)
-        print(msg, flush=True)
         return
 
     def fetch_emails():
         try:
-            timestamp = datetime.now().strftime("%H:%M:%S")
-            print(
-                f"[{timestamp}] 📧 [IMAP Poller]: Quick-scanning inbox ({sender_email})...",
-                flush=True,
-            )
-
             # Set 5-second socket timeout to prevent blocking
             mail = imaplib.IMAP4_SSL("imap.gmail.com", timeout=5)
             mail.login(sender_email, sender_password)
             mail.select("inbox")
 
-            # Check UNSEEN emails first for instant performance
-            status, messages = mail.search(None, "UNSEEN")
+            # Search ALL inbox emails
+            status, messages = mail.search(None, "ALL")
             if status != "OK" or not messages or not messages[0]:
-                # Fallback to last 5 messages if UNSEEN returns empty
-                status, messages = mail.search(None, "ALL")
-
-            if status != "OK" or not messages or not messages[0]:
-                print(
-                    f"[{timestamp}] 📧 [IMAP Poller]: Scan complete. Inbox is empty.",
-                    flush=True,
-                )
                 mail.logout()
                 return
 
             email_ids = messages[0].split()
-            # Fast scan: last 5 emails only
+            # Fast, lightweight scan: strictly last 5 emails only
             recent_ids = email_ids[-5:]
-            matched_count = 0
 
             for num in recent_ids:
                 _, data = mail.fetch(num, "(RFC822)")
@@ -70,8 +70,9 @@ async def check_support_replies(db_path: Path | str = db.DB_PATH) -> None:
                 raw_email = data[0][1]
                 msg_obj = email.message_from_bytes(raw_email)
 
-                sender_header = msg_obj["From"] or ""
-                subject = msg_obj["Subject"] or ""
+                sender_header = decode_mime_header(msg_obj["From"] or "")
+                raw_subject = msg_obj["Subject"] or ""
+                subject = decode_mime_header(raw_subject)
                 body = ""
 
                 if msg_obj.is_multipart():
@@ -82,10 +83,9 @@ async def check_support_replies(db_path: Path | str = db.DB_PATH) -> None:
                 else:
                     body = msg_obj.get_payload(decode=True).decode(errors="ignore")
 
-                # Match Ticket ID format (e.g., KM-8A2F91) in subject or body
-                match = re.search(
-                    r"KM-[A-F0-9]{6}", subject + " " + body, re.IGNORECASE
-                )
+                # Search Ticket ID format (e.g., KM-EFD53D) in decoded subject or body
+                search_text = f"{subject} {raw_subject} {body}"
+                match = re.search(r"KM-[A-F0-9]{6}", search_text, re.IGNORECASE)
                 if match:
                     ticket_id = match.group(0).upper()
 
@@ -95,64 +95,62 @@ async def check_support_replies(db_path: Path | str = db.DB_PATH) -> None:
                         body,
                     )[0].strip()
 
+                    # Fallback if clean_reply is empty or starts with original Ticket ID header
+                    if not clean_reply or clean_reply.startswith("Ticket ID:"):
+                        clean_reply = body.strip()
+
                     if clean_reply:
-                        # Update SQLite database record safely
+                        # Update SQLite database record silently
                         updated = db.update_officer_reply(
                             ticket_id, clean_reply, db_path=db_path
                         )
                         if updated:
-                            matched_count += 1
-                            success_msg = f"[{timestamp}] ✅ [IMAP Poller SUCCESS]: Found officer reply for Ticket #{ticket_id} from {sender_header}! SQLite updated."
-                            logger.info(success_msg)
-                            print(success_msg, flush=True)
+                            logger.info(
+                                f"[IMAP Poller SUCCESS]: Found officer reply for Ticket #{ticket_id} from {sender_header}!"
+                            )
 
             mail.logout()
-            print(
-                f"[{timestamp}] 📧 [IMAP Poller]: Scan finished. Synced {matched_count} ticket replies.",
-                flush=True,
-            )
         except Exception as e:
-            err_msg = f"[IMAP Poller Error]: {e}"
-            logger.error(err_msg)
-            print(err_msg, flush=True)
+            logger.error(f"[IMAP Poller Error]: {e}")
 
     # Run blocking IMAP calls in thread pool
     await asyncio.to_thread(fetch_emails)
 
 
 async def start_periodic_email_polling(
-    interval_seconds: int = 30, db_path: Path | str = db.DB_PATH
+    interval_seconds: int = 45, db_path: Path | str = db.DB_PATH
 ) -> None:
-    """Periodic background task running every interval_seconds."""
-    init_msg = f"🚀 [IMAP Poller]: Service initialized. Polling inbox every {interval_seconds}s..."
-    logger.info(init_msg)
-    print(init_msg, flush=True)
+    """Periodic background task running every interval_seconds silently."""
+    logger.info(
+        f"[IMAP Poller]: Service initialized. Polling inbox every {interval_seconds}s..."
+    )
     while True:
         try:
             await check_support_replies(db_path=db_path)
         except Exception as e:
-            err_msg = f"[IMAP Poller Loop Error]: {e}"
-            logger.error(err_msg)
-            print(err_msg, flush=True)
+            logger.error(f"[IMAP Poller Loop Error]: {e}")
         await asyncio.sleep(interval_seconds)
 
 
+def _run_email_poller_worker(interval_seconds: int, db_path: Path | str) -> None:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(
+        start_periodic_email_polling(
+            interval_seconds=interval_seconds, db_path=db_path
+        )
+    )
+
+
 def start_poller_process(
-    interval_seconds: int = 30, db_path: Path | str = db.DB_PATH
+    interval_seconds: int = 45, db_path: Path | str = db.DB_PATH
 ) -> multiprocessing.Process:
     """Starts periodic IMAP email poller in an isolated background Process."""
-
-    def _worker():
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(
-            start_periodic_email_polling(
-                interval_seconds=interval_seconds, db_path=db_path
-            )
-        )
-
     p = multiprocessing.Process(
-        target=_worker, daemon=True, name="email_poller_process"
+        target=_run_email_poller_worker,
+        args=(interval_seconds, db_path),
+        daemon=True,
+        name="email_poller_process",
     )
     p.start()
     return p

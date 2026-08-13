@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import multiprocessing
 import threading
 
 from aiohttp import web
@@ -101,6 +102,22 @@ async def handle_update_status(request):
         return json_response({"error": str(e)}, status=500)
 
 
+async def handle_sync_email(request):
+    try:
+        import email_listener
+
+        await email_listener.check_support_replies()
+        return json_response(
+            {
+                "success": True,
+                "message": "Email inbox scanned and database synced successfully.",
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error in POST /api/escalations/sync-email: {e}")
+        return json_response({"error": str(e)}, status=500)
+
+
 def create_app():
     app = web.Application()
     app.router.add_options("/{tail:.*}", handle_options)
@@ -109,6 +126,7 @@ def create_app():
     app.router.add_post("/api/escalations/mark-read", handle_mark_read)
     app.router.add_post("/api/escalations/resolve", handle_resolve)
     app.router.add_post("/api/escalations/update-status", handle_update_status)
+    app.router.add_post("/api/escalations/sync-email", handle_sync_email)
     return app
 
 
@@ -140,32 +158,37 @@ def start_api_server_thread(host: str = "0.0.0.0", port: int = 8080) -> None:
     t.start()
 
 
+def _run_api_server_worker(host: str, port: int) -> None:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    app = create_app()
+    runner = web.AppRunner(app)
+    loop.run_until_complete(runner.setup())
+    try:
+        site = web.TCPSite(runner, host, port)
+        loop.run_until_complete(site.start())
+        print(
+            f"🌐 [REST API Server]: Listening for HTTP requests at http://{host}:{port}",
+            flush=True,
+        )
+        logger.info(f"REST API Server running at http://{host}:{port}")
+        loop.run_forever()
+    except OSError:
+        print(
+            f"🌐 [REST API Server]: Port {port} is already active.",
+            flush=True,
+        )
+
+
 def start_api_server_process(
     host: str = "0.0.0.0", port: int = 8080
 ) -> multiprocessing.Process:
     """Starts the aiohttp REST API server in an isolated background Process."""
-
-    def _worker():
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        app = create_app()
-        runner = web.AppRunner(app)
-        loop.run_until_complete(runner.setup())
-        try:
-            site = web.TCPSite(runner, host, port)
-            loop.run_until_complete(site.start())
-            print(
-                f"🌐 [REST API Server]: Listening for HTTP requests at http://{host}:{port}",
-                flush=True,
-            )
-            logger.info(f"REST API Server running at http://{host}:{port}")
-            loop.run_forever()
-        except OSError:
-            print(
-                f"🌐 [REST API Server]: Port {port} is already active.",
-                flush=True,
-            )
-
-    p = multiprocessing.Process(target=_worker, daemon=True, name="api_server_process")
+    p = multiprocessing.Process(
+        target=_run_api_server_worker,
+        args=(host, port),
+        daemon=True,
+        name="api_server_process",
+    )
     p.start()
     return p

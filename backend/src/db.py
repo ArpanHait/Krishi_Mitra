@@ -15,8 +15,15 @@ def get_connection(db_path: Path | str = DB_PATH) -> sqlite3.Connection:
     return conn
 
 
+_INITIALIZED_DBS: set[str] = set()
+
+
 def init_db(db_path: Path | str = DB_PATH) -> None:
-    """Initialize SQLite database tables farmer_profiles, alert_subscriptions, and scheduled_calls if they do not exist."""
+    """Initialize SQLite database tables for farmer profiles, alert subscriptions, and scheduled calls."""
+    path_key = str(db_path)
+    if path_key in _INITIALIZED_DBS:
+        return
+
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute(
@@ -107,7 +114,7 @@ def init_db(db_path: Path | str = DB_PATH) -> None:
                     topic TEXT,
                     summary TEXT,
                     urgency TEXT CHECK(urgency IN ('Low', 'Medium', 'High', 'Emergency')),
-                    status TEXT DEFAULT 'OPEN',
+                    status TEXT,
                     language TEXT,
                     preferred_followup TEXT,
                     officer_response TEXT DEFAULT NULL,
@@ -120,13 +127,11 @@ def init_db(db_path: Path | str = DB_PATH) -> None:
             cursor.execute(
                 """
                 INSERT INTO escalations_new (
-                    ticket_id, farmer_name, topic, summary, urgency, status,
-                    language, preferred_followup, officer_response, has_unread_reply,
-                    created_at, updated_at
+                    ticket_id, farmer_name, topic, summary, urgency, status, language,
+                    preferred_followup, officer_response, has_unread_reply, created_at, updated_at
                 )
-                SELECT ticket_id, farmer_name, topic, summary, urgency, status,
-                       language, preferred_followup, officer_response, has_unread_reply,
-                       created_at, updated_at
+                SELECT ticket_id, farmer_name, topic, summary, urgency, status, language,
+                       preferred_followup, officer_response, has_unread_reply, created_at, updated_at
                 FROM escalations
                 """
             )
@@ -137,6 +142,7 @@ def init_db(db_path: Path | str = DB_PATH) -> None:
             )
 
         conn.commit()
+    _INITIALIZED_DBS.add(path_key)
     logger.info("Initialized krishi_memory.db tables successfully.")
 
 

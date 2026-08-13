@@ -59,38 +59,56 @@ export function TicketDashboard({ buttonStyle = 'icon-only' }: TicketDashboardPr
     }
   }, []);
 
-  const fetchTickets = useCallback(async (isInitial = false) => {
-    try {
-      if (isInitial) {
-        setIsLoading(true);
+  const lastSyncTimeRef = React.useRef<number>(0);
+
+  const syncEmailsAndFetch = useCallback(
+    async (isInitial = false) => {
+      const now = Date.now();
+      // 3-second minimum cooldown guard to prevent rapid multi-click spam
+      if (!isInitial && now - lastSyncTimeRef.current < 3000) {
+        return;
       }
-      setIsRefreshing(true);
-      const res = await fetch('/api/escalations');
-      if (res.ok) {
-        const data: Ticket[] = await res.json();
-        setTickets(data);
-        setHasUnreadReplies(data.some((t) => t.has_unread_reply === 1));
+      lastSyncTimeRef.current = now;
+
+      try {
+        if (isInitial) {
+          setIsLoading(true);
+        }
+        setIsRefreshing(true);
+
+        // On-demand IMAP email sync
+        try {
+          await fetch('/api/escalations/sync-email', { method: 'POST' });
+        } catch (syncErr) {
+          console.error('On-demand email sync error:', syncErr);
+        }
+
+        const res = await fetch('/api/escalations');
+        if (res.ok) {
+          const data: Ticket[] = await res.json();
+          setTickets(data);
+          setHasUnreadReplies(data.some((t) => t.has_unread_reply === 1));
+        }
+        await fetchPendingCount();
+      } catch (err) {
+        console.error('Failed to fetch tickets:', err);
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
       }
-    } catch (err) {
-      console.error('Failed to fetch tickets:', err);
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, []);
+    },
+    [fetchPendingCount]
+  );
 
   useEffect(() => {
     fetchPendingCount();
-    // 30-second interval as requested
-    const interval = setInterval(fetchPendingCount, 30000);
-    return () => clearInterval(interval);
   }, [fetchPendingCount]);
 
   useEffect(() => {
     if (isOpen) {
-      fetchTickets(true);
+      syncEmailsAndFetch(true);
     }
-  }, [isOpen, fetchTickets]);
+  }, [isOpen, syncEmailsAndFetch]);
 
   const handleMarkRead = async (ticket_id: string) => {
     try {
@@ -116,7 +134,7 @@ export function TicketDashboard({ buttonStyle = 'icon-only' }: TicketDashboardPr
         body: JSON.stringify({ ticket_id }),
       });
       if (res.ok) {
-        fetchTickets(false);
+        syncEmailsAndFetch(false);
         fetchPendingCount();
         setSelectedTicket(null);
       }
@@ -196,7 +214,7 @@ export function TicketDashboard({ buttonStyle = 'icon-only' }: TicketDashboardPr
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => fetchTickets(false)}
+                  onClick={() => syncEmailsAndFetch(false)}
                   disabled={isRefreshing}
                   className="rounded-xl border border-white/15 bg-white/10 p-2 text-slate-200 transition-all hover:bg-white/20 hover:text-white"
                   title="Refresh"

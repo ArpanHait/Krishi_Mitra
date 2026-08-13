@@ -275,19 +275,28 @@ You have access to tools `create_escalation` and `check_ticket_status`.
 2. IMMEDIATE COMFORT & FIRST-AID ADVICE MANDATE:
    - When a farmer reports a severe crop issue or asks for an escalation ticket, ALWAYS provide 1 concise, comforting, immediate first-aid step (e.g. "For aphids, you can wash them off with a strong water jet or spray neem oil solution.") so the farmer feels comforted and supported immediately while waiting for officer follow-up.
 
-3. EXPLICIT & CONDITIONAL TICKET CREATION PROTOCOL:
-   - IF THE USER EXPLICITLY ASKS TO RAISE/CREATE A TICKET (e.g., "raise a ticket about pesticides", "support officer", "ticket create kar do"):
-     * Immediately call `create_escalation(farmer_name=..., topic=..., summary=..., urgency=..., language=..., preferred_followup=...)`.
-     * State out loud warmly with ticket confirmation and comforting next steps:
-       - English: "I am creating an urgent support ticket for our agricultural officer. In the meantime, as an immediate solution you can spray neem oil mixed with water. The officer will contact you shortly."
-       - Hindi: "मैं हमारे कृषि अधिकारी के लिए तुरंत एक सहायता टिकट बना रहा हूँ। इस बीच, आप नीम के तेल और पानी का छिड़काव कर सकते हैं। अधिकारी जल्द ही आपसे संपर्क करेंगे।"
-       - Bengali: "আমি আমাদের কৃষি কর্মকর্তার জন্য একটি জরুরি সহায়তা টিকিট তৈরি করছি। এই সময়ে আপনি জলের সাথে নিম তেল মিশিয়ে স্প্রে করতে পারেন। কর্মকর্তা শীঘ্রই আপনার সাথে যোগাযোগ করবেন।"
-   - IF PROPOSING ESCALATION (TRIGGER A or B without explicit user command):
-     * Ask for permission out loud: "This crop issue requires expert review. Would you like me to create a support ticket and notify our agricultural officer to contact you?"
-   - IF USER AGREES ("yes", "sure", "ha", "haan", "haan kar do", "thik ache"):
-     * Call `create_escalation(...)` and speak the created ticket confirmation warmly.
+3. EXPLICIT CONSENT & TICKET CREATION PROTOCOL (STRICT):
+   - MANDATORY CONSENT RULE: The agent MUST NEVER call `create_escalation` or register a support ticket without explicit user consent unless the user explicitly requested a ticket in their statement (e.g., "create a ticket", "raise a support ticket", "register a ticket").
+   - IF A COMPLEX ISSUE / CRISIS / MISSING DATA OCCURS (and user did NOT explicitly request a ticket):
+     * DO NOT call `create_escalation` immediately!
+     * Answer the user's question first.
+     * AFTER answering, explicitly ask for user consent to raise a ticket:
+       - English: "This issue requires expert review by our agricultural officer. Would you like me to raise an official support ticket for you?"
+       - Hindi: "इस समस्या के लिए हमारे कृषि अधिकारी की समीक्षा की ज़रूरत है। क्या आप चाहते हैं कि मैं आपके लिए एक सहायता टिकट बनाऊँ?"
+       - Bengali: "এই সমস্যার জন্য আমাদের কৃষি কর্মকর্তার পর্যালোচনা প্রয়োজন। আপনি কি চান আমি আপনার জন্য একটি সহায়তা টিকিট তৈরি করি?"
+   - IF THE USER EXPLICITLY REQUESTS OR AGREES TO CREATE A TICKET ("yes", "sure", "ha", "haan", "haan kar do", "thik ache", "create a ticket"):
+     * Call function tool `create_escalation(farmer_name=..., topic=..., summary=..., urgency=..., language=..., preferred_followup=...)`.
    - IF USER REFUSES ("no", "na", "nahi", "don't create"):
-     * Do NOT call `create_escalation`. Continue conversation normally.
+     * Respectfully acknowledge: "No problem! I will not create a ticket." / "कोई बात नहीं! मैं टिकट नहीं बनाऊँगा।" / "কোনো সমস্যা নেই! আমি টিকিট তৈরি করব না।"
+     * DO NOT call `create_escalation` under any circumstances!
+
+4. BRIEF CONFIRMATION AFTER TICKET CREATION (STRICT):
+   - AFTER `create_escalation` tool is executed, keep the response SHORT, BRIEF, AND CONCISE (1 to 2 sentences max).
+   - DO NOT provide long detailed explanations, lengthy repeat advice, or complex multi-step instructions after ticket creation!
+   - Confirm only the Ticket ID and reassure the farmer that the support officer will contact them shortly:
+     * English: "I have registered your support ticket (#KM-XXXXXX). Our agricultural officer has been notified and will contact you shortly."
+     * Hindi: "मैंने आपका सहायता टिकट (#KM-XXXXXX) दर्ज कर लिया है। हमारे कृषि अधिकारी को सूचित कर दिया गया है और वे जल्द ही आपसे संपर्क करेंगे।"
+     * Bengali: "আমি আপনার সহায়তা টিকিট (#KM-XXXXXX) রসিদ নথিভুক্ত করেছি। আমাদের কৃষি কর্মকর্তাকে জানানো হয়েছে এবং তিনি শীঘ্রই আপনার সাথে যোগাযোগ করবেন।"
 """
 
 
@@ -659,9 +668,9 @@ server = AgentServer()
 
 def prewarm(proc: JobProcess):
     proc.userdata["vad"] = silero.VAD.load(
-        min_speech_duration=0.5,
-        min_silence_duration=1.2,
-        prefix_padding_duration=0.6,
+        min_speech_duration=0.05,
+        min_silence_duration=0.55,
+        prefix_padding_duration=0.5,
     )
 
 
@@ -869,9 +878,7 @@ async def my_agent(ctx: JobContext):
 
 if __name__ == "__main__":
     import api_server
-    import email_listener
 
     outbound_dialer.start_scheduled_call_poller()
-    email_listener.start_poller_process(interval_seconds=30)
     api_server.start_api_server_process(port=8080)
     cli.run_app(server)

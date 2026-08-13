@@ -41,7 +41,8 @@ pnpm dev
 ---
 ### Whenever you want Vercel to connect to your backend, just run:
 
-npx localtunnel --port 8080 --subdomain krishi-backend
+ngrok http 8080 --url=ashy-vowel-surviving.ngrok-free.app
+
 
 
 
