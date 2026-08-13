@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import time
 from collections.abc import AsyncIterable
 
 from dotenv import load_dotenv
@@ -34,13 +35,25 @@ SYSTEM_PROMPT = """You are Krishi Mitra (🌾), an agricultural voice advisor sp
 
 ### 1. STRICT LANGUAGE MATCHING DIRECTIVE (HIGHEST PRIORITY OVERRIDE)
 - YOU MUST MATCH AND RESPOND IN THE EXACT SAME LANGUAGE AS THE USER'S LATEST INPUT!
-- IF THE USER SPEAKS TO YOU IN ENGLISH (e.g., "What fertilizer should I use for wheat in the Rabi season?", "Hello", "Do you know my name?"):
+- IF THE USER TYPES OR SPEAKS IN ENGLISH (e.g., "What fertilizer should I use?", "Hello", "Do you know my name?", "Delete all call data"):
   * YOU MUST RESPOND 100% IN PURE ENGLISH for BOTH "tts_text" AND "display_text"!
-  * ABSOLUTELY ZERO HINDI WORDS AND ZERO DEVANAGARI CHARACTERS WHEN THE USER SPEAKS IN ENGLISH!
-- IF THE USER SPEAKS TO YOU IN BENGALI:
+  * ABSOLUTELY ZERO HINDI WORDS AND ZERO DEVANAGARI CHARACTERS WHEN THE USER SPEAKS OR TYPES IN ENGLISH!
+- IF THE USER SPEAKS OR TYPES IN BENGALI:
   * YOU MUST RESPOND 100% IN PURE BENGALI SCRIPT (বাংলা অক্ষর) for BOTH "tts_text" AND "display_text"!
-- IF THE USER SPEAKS TO YOU IN HINDI OR HINGLISH:
+  * ABSOLUTELY ZERO HINDI WORDS AND ZERO DEVANAGARI CHARACTERS WHEN THE USER SPEAKS IN BENGALI!
+- IF THE USER SPEAKS OR TYPES IN DEVANAGARI HINDI OR HINGLISH:
   * YOU MUST RESPOND 100% IN PURE DEVANAGARI HINDI (देवनागरी हिंदी) for BOTH "tts_text" AND "display_text"!
+
+### 1.1 DATA DELETION & CALL ANALYTICS RULES
+- WHEN USER ASKS ABOUT CALL HISTORY / CALL STATS / ANALYTICS ("tell me about calling history", "what are my call stats?", "how many successful calls?"):
+  * CALL THE `get_call_history_summary` TOOL ONLY!
+  * REPORT THE EXACT METRIC NUMBERS (total calls, successful, declined, failed, success rate %) IN THE USER'S INPUT LANGUAGE!
+- WHEN USER ASKS TO DELETE CALL LOGS / CALL HISTORY / CALL METRICS ("delete all call data", "clear call history", "remove call logs"):
+  * CALL THE `delete_call_history` TOOL ONLY!
+  * THIS CLEARS CALL METRICS/LOGS WITHOUT WIPING THE FARMER'S PERSONAL NAME OR PROFILE FACTS!
+  * RESPOND TO THE USER IN THEIR INPUT LANGUAGE THAT CALL LOGS HAVE BEEN CLEARED WHILE THEIR PROFILE REMAINS SAFE.
+- WHEN USER ASKS TO FORGET PERSONAL DETAILS / PROFILE ("forget my details", "delete my name", "forget my profile"):
+  * CALL THE `forget_farmer_facts` TOOL ONLY!
 
 ### 2. IDENTITY & TONAL STYLE
 - Role: Helpful local agricultural expert speaking with a farmer over a phone call.
@@ -361,9 +374,19 @@ def parse_llm_json(raw_text: str) -> tuple[str, str]:
     return clean_tts, clean_display
 
 
+class CallContext:
+    def __init__(self):
+        self.start_time = time.time()
+        self.topic = "General Inquiry"
+        self.objective_fulfilled = False
+        self.caller_id = "Browser User"
+        self.call_type = "BROWSER"
+
+
 class Assistant(Agent):
-    def __init__(self) -> None:
+    def __init__(self, call_ctx: CallContext | None = None) -> None:
         super().__init__(instructions=SYSTEM_PROMPT)
+        self.call_ctx = call_ctx or CallContext()
 
     @function_tool
     async def lookup_caller(self, context: RunContext, user_id: str) -> str:
@@ -410,6 +433,7 @@ class Assistant(Agent):
             "district": district,
             "last_topic": last_topic,
         }
+        self.call_ctx.objective_fulfilled = True
         saved_profile = db.upsert_farmer_profile(
             user_id, name=name, facts=facts, consent=True
         )
@@ -423,16 +447,47 @@ class Assistant(Agent):
         context: RunContext,
         user_id: str,
     ) -> str:
-        """Delete and clear all stored farmer profile facts and memory from the SQLite database when requested by the user.
+        """Delete and clear stored farmer personal profile facts (name, crops, location) from SQLite when explicitly requested by the user.
+        DO NOT use this tool if the user asks to delete call logs or call history (use delete_call_history instead).
 
         Args:
             user_id: Caller ID / room ID of the farmer.
         """
         db.delete_farmer_profile(user_id)
         return json.dumps(
-            {"success": True, "message": "All stored profile facts deleted."},
+            {"success": True, "message": "All stored personal profile facts deleted."},
             ensure_ascii=False,
         )
+
+    @function_tool
+    async def delete_call_history(
+        self,
+        context: RunContext,
+    ) -> str:
+        """Delete and clear all call history logs and call metrics from the database when requested by the user.
+        Use this tool ONLY when the user explicitly requests to delete call logs, clear call history, or reset call analytics data.
+        DO NOT use this tool if the user asks to forget personal facts/profile.
+        """
+        deleted_count = db.clear_all_call_logs()
+        return json.dumps(
+            {
+                "success": True,
+                "deleted_call_logs_count": deleted_count,
+                "message": f"Successfully deleted all {deleted_count} call log records from the database. The farmer's personal profile remains completely intact.",
+            },
+            ensure_ascii=False,
+        )
+
+    @function_tool
+    async def get_call_history_summary(
+        self,
+        context: RunContext,
+    ) -> str:
+        """Fetch and return the current call outcome analytics metrics and recent call history logs from the database.
+        Use this tool whenever the user asks about their call history, call stats, total calls, successful calls, declined calls, or call analytics summary.
+        """
+        analytics = db.get_call_analytics()
+        return json.dumps(analytics, ensure_ascii=False)
 
     @function_tool
     async def get_district_weather(
@@ -448,6 +503,8 @@ class Assistant(Agent):
             district_name: Name of district (e.g. 'Burdwan', 'Hooghly', 'Bankura', 'Nadia', 'Kolkata').
             state: Name of state (default 'West Bengal').
         """
+        self.call_ctx.objective_fulfilled = True
+        self.call_ctx.topic = f"Weather in {district_name}"
         return await tools.fetch_district_weather(
             district_name=district_name, state=state
         )
@@ -468,6 +525,8 @@ class Assistant(Agent):
             district: District name (default 'Burdwan').
             state: State name (default 'West Bengal').
         """
+        self.call_ctx.objective_fulfilled = True
+        self.call_ctx.topic = f"Mandi prices: {commodity} in {district}"
         return await tools.fetch_mandi_prices(
             commodity=commodity, district=district, state=state
         )
@@ -492,6 +551,8 @@ class Assistant(Agent):
             district: District name (default 'Burdwan').
             language: Spoken language ('english', 'hindi', 'bengali').
         """
+        self.call_ctx.objective_fulfilled = True
+        self.call_ctx.topic = f"Scheduled call: {topic}"
         return await tools.schedule_outbound_call(
             delay_or_time_str=delay_or_time_str,
             topic=topic,
@@ -519,6 +580,8 @@ class Assistant(Agent):
             phone_number: Optional phone number.
             language: Spoken language ('english', 'hindi', 'bengali').
         """
+        self.call_ctx.objective_fulfilled = True
+        self.call_ctx.topic = f"Alert: {alert_type} in {district}"
         return await tools.register_conditional_alert(
             district=district,
             alert_type=alert_type,
@@ -539,6 +602,8 @@ class Assistant(Agent):
         Args:
             user_id: User ID / phone number of farmer.
         """
+        self.call_ctx.objective_fulfilled = True
+        self.call_ctx.topic = "Stop alerts"
         cancelled_count = db.cancel_alert_subscription(user_id)
         return json.dumps(
             {
@@ -571,6 +636,8 @@ class Assistant(Agent):
             language: Spoken language ('english', 'hindi', 'bengali').
             preferred_followup: Preferred followup method ('Phone Call', 'WhatsApp', 'Visit').
         """
+        self.call_ctx.objective_fulfilled = True
+        self.call_ctx.topic = f"Ticket: {topic}"
         return await tools.create_escalation(
             farmer_name=farmer_name,
             topic=topic,
@@ -768,8 +835,12 @@ async def my_agent(ctx: JobContext):
         preemptive_generation=True,
     )
 
+    call_ctx = CallContext()
+    if ctx.room and ctx.room.name:
+        call_ctx.caller_id = f"Room {ctx.room.name}"
+
     await session.start(
-        agent=Assistant(),
+        agent=Assistant(call_ctx=call_ctx),
         room=ctx.room,
         room_options=room_io.RoomOptions(
             audio_input=room_io.AudioInputOptions(

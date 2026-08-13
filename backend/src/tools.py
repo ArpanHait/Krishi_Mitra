@@ -291,6 +291,119 @@ def parse_delay_seconds(delay_or_time_str: str) -> int:
     return 10
 
 
+async def generate_llm_topic_summary(
+    topic: str, district: str = "Burdwan", language: str = "hindi"
+) -> str:
+    """Use Gemini LLM to generate a concise, expert 2-sentence voice call answer for any arbitrary agricultural topic."""
+    api_key = os.getenv("GOOGLE_API_KEY", "").strip()
+    if not api_key:
+        return f"Regarding {topic} in {district}, please consult your local Krishi Bhavan center for full assistance."
+
+    prompt = (
+        f"You are Krishi Mitra, an expert Indian agricultural advisor. A farmer in {district} district "
+        f"is receiving an automated voice phone call regarding: '{topic}'.\n"
+        f"Provide a clear, helpful, accurate 2-sentence spoken response answering their query.\n"
+        f"Language requirement: Respond in natural {language}.\n"
+        f"Do not include markdown or emojis. Keep it under 40 words so it speaks smoothly on a phone call."
+    )
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.3, "maxOutputTokens": 100},
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            res = await client.post(url, json=payload)
+            if res.status_code == 200:
+                data = res.json()
+                text = (
+                    data.get("candidates", [{}])[0]
+                    .get("content", {})
+                    .get("parts", [{}])[0]
+                    .get("text", "")
+                    .strip()
+                )
+                if text:
+                    return text
+    except Exception as e:
+        logger.warning(f"Gemini LLM call summary generation failed: {e}")
+
+    return f"Regarding {topic} in {district}, Krishi Mitra recommends consulting your local Krishi Bhavan agriculture officer."
+
+
+async def prefetch_call_details(
+    topic: str, district: str = "Burdwan", language: str = "hindi"
+) -> str:
+    """Smart detail pre-fetcher for scheduled outbound calls:
+    1. Weather API if weather/temperature requested
+    2. Mandi API if crop/mandi price requested
+    3. Gemini LLM for ANY arbitrary custom agricultural topic!
+    """
+    if not topic:
+        return ""
+
+    topic_lower = topic.lower()
+
+    # 1. Weather intent
+    if any(
+        k in topic_lower
+        for k in [
+            "weather",
+            "temperature",
+            "rain",
+            "forecast",
+            "sowing",
+            "spraying",
+            "मौसम",
+            "तापमान",
+            "बारिश",
+            "আবহাওয়া",
+            "বৃষ্টি",
+            "তাপমাত্রা",
+        ]
+    ):
+        try:
+            return await fetch_district_weather(district_name=district)
+        except Exception as fe:
+            logger.warning(f"Error fetching weather in prefetcher: {fe}")
+
+    # 2. Mandi commodity intent
+    target_commodity = extract_commodity_from_topic(topic)
+    if target_commodity and any(
+        k in topic_lower
+        for k in [
+            "price",
+            "prices",
+            "rate",
+            "rates",
+            "mandi",
+            "bhav",
+            "dam",
+            "daam",
+            "bazar",
+            "দাম",
+            "ভাব",
+            "দর",
+            "বাজার",
+        ]
+    ):
+        try:
+            return await fetch_mandi_prices(target_commodity, district)
+        except Exception as fe:
+            logger.warning(f"Error fetching mandi prices in prefetcher: {fe}")
+
+    # 3. Dynamic Gemini LLM advice for ANY arbitrary agricultural topic
+    try:
+        return await generate_llm_topic_summary(
+            topic=topic, district=district, language=language
+        )
+    except Exception as fe:
+        logger.warning(f"Error generating LLM topic summary: {fe}")
+        return f"Regarding {topic} in {district}, please consult your local Krishi Bhavan center."
+
+
 async def execute_scheduled_call_task(
     delay_seconds: int,
     to_number: str,
@@ -305,14 +418,9 @@ async def execute_scheduled_call_task(
     )
     await asyncio.sleep(delay_seconds)
 
-    # Dynamically extract crop/fruit commodity from topic text
-    fetched_details = ""
-    target_commodity = extract_commodity_from_topic(topic)
-    if target_commodity:
-        try:
-            fetched_details = await fetch_mandi_prices(target_commodity, district)
-        except Exception as fe:
-            logger.warning(f"Error pre-fetching mandi price in in-memory task: {fe}")
+    fetched_details = await prefetch_call_details(
+        topic=topic, district=district, language=language
+    )
 
     outbound_dialer.trigger_twilio_call(
         to_number=to_number,

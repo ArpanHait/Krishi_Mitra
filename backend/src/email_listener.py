@@ -136,9 +136,7 @@ def _run_email_poller_worker(interval_seconds: int, db_path: Path | str) -> None
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     loop.run_until_complete(
-        start_periodic_email_polling(
-            interval_seconds=interval_seconds, db_path=db_path
-        )
+        start_periodic_email_polling(interval_seconds=interval_seconds, db_path=db_path)
     )
 
 

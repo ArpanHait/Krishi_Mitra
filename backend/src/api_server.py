@@ -118,6 +118,39 @@ async def handle_sync_email(request):
         return json_response({"error": str(e)}, status=500)
 
 
+async def handle_get_analytics(request):
+    try:
+        analytics = db.get_call_analytics()
+        return json_response(analytics)
+    except Exception as e:
+        logger.error(f"Error in GET /api/analytics: {e}")
+        return json_response({"error": str(e)}, status=500)
+
+
+async def handle_log_call(request):
+    try:
+        body = await request.json()
+        call_type = body.get("call_type", "BROWSER")
+        topic = body.get("topic", "General Inquiry")
+        duration_seconds = int(body.get("duration_seconds", 0))
+        outcome = body.get("outcome", "SUCCESS")
+        caller_id = body.get("caller_id", "Browser User")
+        failure_reason = body.get("failure_reason")
+
+        call_id = db.log_call_outcome(
+            call_type=call_type,
+            topic=topic,
+            duration_seconds=duration_seconds,
+            outcome=outcome,
+            caller_id=caller_id,
+            failure_reason=failure_reason,
+        )
+        return json_response({"success": True, "call_id": call_id})
+    except Exception as e:
+        logger.error(f"Error in POST /api/analytics/log-call: {e}")
+        return json_response({"error": str(e)}, status=500)
+
+
 def create_app():
     app = web.Application()
     app.router.add_options("/{tail:.*}", handle_options)
@@ -127,6 +160,8 @@ def create_app():
     app.router.add_post("/api/escalations/resolve", handle_resolve)
     app.router.add_post("/api/escalations/update-status", handle_update_status)
     app.router.add_post("/api/escalations/sync-email", handle_sync_email)
+    app.router.add_get("/api/analytics", handle_get_analytics)
+    app.router.add_post("/api/analytics/log-call", handle_log_call)
     return app
 
 

@@ -1,9 +1,8 @@
 'use client';
 
 import { type ComponentProps } from 'react';
-import { AnimatePresence } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { type AgentState, type ReceivedMessage } from '@livekit/components-react';
-import { AgentChatIndicator } from '@/components/agents-ui/agent-chat-indicator';
 import {
   Conversation,
   ConversationContent,
@@ -92,11 +91,21 @@ export function AgentChatTranscript({
         })}
         <AnimatePresence>
           {agentState === 'thinking' && (
-            <div className="my-2 flex justify-start">
-              <div className="rounded-2xl rounded-tl-xs border border-[#e9c46a]/30 bg-[#184e38]/80 px-4 py-2.5 shadow-lg backdrop-blur-md">
-                <AgentChatIndicator size="sm" />
+            <motion.div
+              initial={{ opacity: 0, y: 8, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 5, scale: 0.9 }}
+              transition={{ type: 'spring', damping: 20, stiffness: 350 }}
+              className="my-2.5 flex justify-start"
+            >
+              <div className="relative flex items-center justify-center rounded-2xl rounded-tl-xs border border-[#52b788]/50 bg-gradient-to-br from-[#1b4332]/80 via-[#122c21]/90 to-[#0c2419]/90 px-4.5 py-3 shadow-xl backdrop-blur-xl">
+                <div className="flex items-center gap-1.5 px-0.5">
+                  <span className="h-2.5 w-2.5 animate-bounce rounded-full bg-emerald-300 [animation-delay:-0.32s]" />
+                  <span className="h-2.5 w-2.5 animate-bounce rounded-full bg-emerald-300 [animation-delay:-0.16s]" />
+                  <span className="h-2.5 w-2.5 animate-bounce rounded-full bg-emerald-300" />
+                </div>
               </div>
-            </div>
+            </motion.div>
           )}
         </AnimatePresence>
       </ConversationContent>

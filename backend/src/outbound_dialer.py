@@ -101,6 +101,46 @@ def trigger_twilio_call(
         }
 
 
+async def _verify_call_status_task(
+    call_sid: str, topic: str, to_num: str, call_id: int
+) -> None:
+    """Wait 12s after dialing then check Twilio API to see if call was answered or declined."""
+    await asyncio.sleep(12)
+    client, twilio_phone = _get_twilio_client()
+    if not client or not call_sid or call_sid.startswith("SIM_"):
+        return
+
+    try:
+        call_obj = client.calls(call_sid).fetch()
+        status = str(call_obj.status).lower()
+        duration = int(call_obj.duration or 0)
+        logger.info(
+            f"Verified Twilio call {call_sid}: status={status}, duration={duration}s"
+        )
+
+        if status in ("no-answer", "busy", "canceled", "failed") or duration == 0:
+            db.log_call_outcome(
+                call_type="SIP_OUTBOUND",
+                topic=topic,
+                duration_seconds=0,
+                outcome="FAILED",
+                caller_id=f"Phone {to_num or 'User'}",
+                failure_reason="Call unanswered or declined by recipient",
+            )
+            db.mark_scheduled_call_completed(call_id, status="failed")
+        else:
+            db.log_call_outcome(
+                call_type="SIP_OUTBOUND",
+                topic=topic,
+                duration_seconds=max(duration, 12),
+                outcome="SUCCESS",
+                caller_id=f"Phone {to_num or 'User'}",
+            )
+            db.mark_scheduled_call_completed(call_id, status="completed")
+    except Exception as ve:
+        logger.warning(f"Failed to verify Twilio call status for {call_sid}: {ve}")
+
+
 _poller_started = False
 
 
@@ -125,19 +165,16 @@ async def _poll_due_calls_loop():
                     )
                     continue
 
-                # Pre-fetch mandi price details if crop is mentioned
-                # Dynamically extract commodity from topic text
+                # Smart pre-fetcher: Weather API, Mandi API, or Gemini LLM advice
                 fetched_details = ""
                 try:
                     import tools
 
-                    target_commodity = tools.extract_commodity_from_topic(topic)
-                    if target_commodity:
-                        fetched_details = await tools.fetch_mandi_prices(
-                            target_commodity, district
-                        )
+                    fetched_details = await tools.prefetch_call_details(
+                        topic=topic, district=district, language=lang
+                    )
                 except Exception as fe:
-                    logger.warning(f"Error pre-fetching mandi price in poller: {fe}")
+                    logger.warning(f"Error pre-fetching call details in poller: {fe}")
 
                 logger.info(
                     f"Poller executing claimed call #{call_id} to {to_num} for '{topic}'"
@@ -151,9 +188,42 @@ async def _poll_due_calls_loop():
                     bypass_cooldown=True,  # Explicitly scheduled by poller
                     details=fetched_details,
                 )
-                db.mark_scheduled_call_completed(
-                    call_id, status="completed" if res.get("success") else "failed"
-                )
+                call_sid = res.get("call_sid")
+                if call_sid and not call_sid.startswith("SIM_"):
+                    # Launch non-blocking status verifier to check if answered vs declined
+                    asyncio.create_task(
+                        _verify_call_status_task(
+                            call_sid=call_sid,
+                            topic=topic,
+                            to_num=to_num,
+                            call_id=call_id,
+                        )
+                    )
+                else:
+                    is_success = res.get("success", False) and not res.get(
+                        "suppressed", False
+                    )
+                    db.mark_scheduled_call_completed(
+                        call_id, status="completed" if is_success else "failed"
+                    )
+                    if is_success:
+                        db.log_call_outcome(
+                            call_type="SIP_OUTBOUND",
+                            topic=topic,
+                            duration_seconds=15,
+                            outcome="SUCCESS",
+                            caller_id=f"Phone {to_num or 'User'}",
+                        )
+                    else:
+                        db.log_call_outcome(
+                            call_type="SIP_OUTBOUND",
+                            topic=topic,
+                            duration_seconds=0,
+                            outcome="FAILED",
+                            caller_id=f"Phone {to_num or 'User'}",
+                            failure_reason=res.get("error")
+                            or "Call unanswered or declined by recipient",
+                        )
         except Exception as e:
             logger.error(f"Error in scheduled call poller: {e}")
 

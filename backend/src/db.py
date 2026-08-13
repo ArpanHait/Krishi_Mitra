@@ -1,6 +1,7 @@
 import datetime
 import logging
 import sqlite3
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -86,6 +87,20 @@ def init_db(db_path: Path | str = DB_PATH) -> None:
                 has_unread_reply INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS call_logs (
+                call_id TEXT PRIMARY KEY,
+                caller_id TEXT DEFAULT 'Browser User',
+                call_type TEXT CHECK(call_type IN ('BROWSER', 'SIP_OUTBOUND')),
+                topic TEXT DEFAULT 'General Inquiry',
+                duration_seconds INTEGER DEFAULT 0,
+                outcome TEXT CHECK(outcome IN ('SUCCESS', 'FAILED')),
+                failure_reason TEXT DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
@@ -733,3 +748,133 @@ def get_latest_escalation(
             cursor.execute("SELECT * FROM escalations ORDER BY created_at DESC LIMIT 1")
         row = cursor.fetchone()
         return dict(row) if row else None
+
+
+def log_call_outcome(
+    call_type: str = "BROWSER",
+    topic: str = "General Inquiry",
+    duration_seconds: int = 0,
+    outcome: str = "SUCCESS",
+    caller_id: str = "Browser User",
+    failure_reason: str | None = None,
+    db_path: Path | str | None = None,
+) -> str:
+    """Log a completed call session outcome and metrics to SQLite database."""
+    target_db = db_path or DB_PATH
+    init_db(target_db)
+    call_id = f"CALL-{uuid.uuid4().hex[:6].upper()}"
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    clean_type = "SIP_OUTBOUND" if "SIP" in str(call_type).upper() else "BROWSER"
+    clean_outcome = "SUCCESS" if str(outcome).upper() == "SUCCESS" else "FAILED"
+    clean_topic = topic or "General Inquiry"
+
+    with get_connection(target_db) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO call_logs (call_id, caller_id, call_type, topic, duration_seconds, outcome, failure_reason, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                call_id,
+                caller_id,
+                clean_type,
+                clean_topic,
+                int(duration_seconds),
+                clean_outcome,
+                failure_reason,
+                now,
+            ),
+        )
+        conn.commit()
+    logger.info(
+        f"[Call Analytics]: Logged {clean_type} call #{call_id} - Outcome: {clean_outcome} ({duration_seconds}s)"
+    )
+    return call_id
+
+
+def get_call_analytics(db_path: Path | str | None = None) -> dict[str, Any]:
+    """Retrieve summary call metrics and recent call logs from SQLite database."""
+    target_db = db_path or DB_PATH
+    init_db(target_db)
+    with get_connection(target_db) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM call_logs")
+        total_calls = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM call_logs WHERE outcome = 'SUCCESS'")
+        successful_calls = cursor.fetchone()[0]
+
+        cursor.execute(
+            """
+            SELECT COUNT(*) FROM call_logs
+            WHERE outcome = 'FAILED'
+            AND (
+                failure_reason LIKE '%unanswered%'
+                OR failure_reason LIKE '%declined%'
+                OR failure_reason LIKE '%busy%'
+                OR failure_reason LIKE '%canceled%'
+                OR failure_reason LIKE '%pick%'
+            )
+            """
+        )
+        declined_calls = cursor.fetchone()[0]
+
+        cursor.execute(
+            """
+            SELECT COUNT(*) FROM call_logs
+            WHERE outcome = 'FAILED'
+            AND (
+                failure_reason IS NULL
+                OR (
+                    failure_reason NOT LIKE '%unanswered%'
+                    AND failure_reason NOT LIKE '%declined%'
+                    AND failure_reason NOT LIKE '%busy%'
+                    AND failure_reason NOT LIKE '%canceled%'
+                    AND failure_reason NOT LIKE '%pick%'
+                )
+            )
+            """
+        )
+        system_failed_calls = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM call_logs WHERE outcome = 'FAILED'")
+        failed_calls = cursor.fetchone()[0]
+
+        cursor.execute(
+            """
+            SELECT call_id, caller_id, call_type, topic, duration_seconds, outcome, failure_reason, created_at
+            FROM call_logs
+            ORDER BY created_at DESC
+            LIMIT 10
+            """
+        )
+        rows = cursor.fetchall()
+        recent_logs = [dict(row) for row in rows]
+
+        success_rate = (
+            round((successful_calls / total_calls) * 100, 1) if total_calls > 0 else 0.0
+        )
+
+        return {
+            "total_calls": total_calls,
+            "successful_calls": successful_calls,
+            "declined_calls": declined_calls,
+            "system_failed_calls": system_failed_calls,
+            "failed_calls": failed_calls,
+            "success_rate": success_rate,
+            "recent_logs": recent_logs,
+        }
+
+
+def clear_all_call_logs(db_path: Path | str | None = None) -> int:
+    """Delete all records from the call_logs table in SQLite. Returns count of deleted rows."""
+    target_db = db_path or DB_PATH
+    init_db(target_db)
+    with get_connection(target_db) as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM call_logs")
+        deleted_count = cursor.rowcount
+        conn.commit()
+    logger.info(f"[Call Analytics]: Cleared all {deleted_count} call log records.")
+    return deleted_count
