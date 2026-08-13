@@ -35,6 +35,7 @@ export async function GET() {
         cache: 'no-store',
         headers: {
           'Bypass-Tunnel-Reminder': 'true',
+          'localtunnel-bypass-warning': 'true',
           'User-Agent': 'Mozilla/5.0',
         },
       });

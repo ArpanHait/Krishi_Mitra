@@ -13,6 +13,7 @@ export async function GET() {
     const res = await fetch(targetUrl, {
       headers: {
         'Bypass-Tunnel-Reminder': 'true',
+        'localtunnel-bypass-warning': 'true',
         'User-Agent': 'Mozilla/5.0',
       },
     });

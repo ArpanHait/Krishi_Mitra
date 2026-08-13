@@ -16,6 +16,7 @@ export async function POST(request: Request) {
       headers: {
         'Content-Type': 'application/json',
         'Bypass-Tunnel-Reminder': 'true',
+        'localtunnel-bypass-warning': 'true',
         'User-Agent': 'Mozilla/5.0',
       },
       body: JSON.stringify(body),
