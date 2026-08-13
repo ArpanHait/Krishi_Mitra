@@ -36,11 +36,18 @@ export async function GET() {
         headers: {
           'Bypass-Tunnel-Reminder': 'true',
           'localtunnel-bypass-warning': 'true',
-          'User-Agent': 'Mozilla/5.0',
+          'ngrok-skip-browser-warning': 'true',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
         },
       });
-      const data = await res.json();
-      return NextResponse.json(data);
+      const text = await res.text();
+      try {
+        const data = JSON.parse(text);
+        return NextResponse.json(data);
+      } catch {
+        console.error('Backend returned HTML landing page instead of JSON:', text.slice(0, 150));
+        return NextResponse.json({ count: 0, has_unread_replies: false, unread_count: 0 });
+      }
     } catch (error) {
       console.error('Error fetching pending count from backend REST API:', error);
       return NextResponse.json({ count: 0, has_unread_replies: false, unread_count: 0 });
