@@ -818,7 +818,7 @@ async def my_agent(ctx: JobContext):
                 "আবহাওয়া",
                 "বৃষ্টি",
             ],
-            endpointing_ms=500,
+            endpointing_ms=800,
             smart_format=True,
         ),
         llm=google.LLM(

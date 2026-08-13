@@ -151,6 +151,46 @@ async def handle_log_call(request):
         return json_response({"error": str(e)}, status=500)
 
 
+async def handle_twilio_status(request):
+    """Twilio StatusCallback webhook handler. Called automatically by Twilio when phone calls complete or get declined."""
+    try:
+        try:
+            data = await request.post()
+        except Exception:
+            data = {}
+
+        call_status = str(data.get("CallStatus", "")).lower()
+        call_duration = int(data.get("CallDuration") or 0)
+        to_number = data.get("To", "User")
+
+        logger.info(
+            f"[Twilio Webhook]: CallStatus={call_status}, Duration={call_duration}s, To={to_number}"
+        )
+
+        if call_status in ("completed", "in-progress", "answered") or call_duration > 0:
+            db.log_call_outcome(
+                call_type="SIP_OUTBOUND",
+                topic="Outbound Call",
+                duration_seconds=max(call_duration, 15),
+                outcome="SUCCESS",
+                caller_id=f"Phone {to_number}",
+            )
+        elif call_status in ("no-answer", "busy", "canceled", "failed"):
+            db.log_call_outcome(
+                call_type="SIP_OUTBOUND",
+                topic="Outbound Call",
+                duration_seconds=0,
+                outcome="FAILED",
+                caller_id=f"Phone {to_number}",
+                failure_reason="Call unanswered or declined by recipient",
+            )
+
+        return web.Response(text="<Response/>", content_type="text/xml")
+    except Exception as e:
+        logger.error(f"Error handling Twilio status webhook: {e}")
+        return web.Response(text="<Response/>", content_type="text/xml")
+
+
 def create_app():
     app = web.Application()
     app.router.add_options("/{tail:.*}", handle_options)
@@ -162,6 +202,8 @@ def create_app():
     app.router.add_post("/api/escalations/sync-email", handle_sync_email)
     app.router.add_get("/api/analytics", handle_get_analytics)
     app.router.add_post("/api/analytics/log-call", handle_log_call)
+    app.router.add_post("/api/twilio/status", handle_twilio_status)
+    app.router.add_get("/api/twilio/status", handle_twilio_status)
     return app
 
 

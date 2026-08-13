@@ -74,11 +74,25 @@ def trigger_twilio_call(
         encoded_msg = urllib.parse.quote(spoken_text)
         twimlet_url = f"https://twimlets.com/message?Message%5B0%5D={encoded_msg}"
 
-        call = client.calls.create(
-            url=twimlet_url,
-            to=target_number,
-            from_=twilio_phone,
-        )
+        backend_url = os.getenv("BACKEND_API_URL", "").strip().rstrip("/")
+        kwargs = {
+            "url": twimlet_url,
+            "to": target_number,
+            "from_": twilio_phone,
+        }
+        if backend_url:
+            kwargs["status_callback"] = f"{backend_url}/api/twilio/status"
+            kwargs["status_callback_event"] = [
+                "completed",
+                "answered",
+                "no-answer",
+                "busy",
+                "failed",
+                "canceled",
+            ]
+            kwargs["status_callback_method"] = "POST"
+
+        call = client.calls.create(**kwargs)
 
         logger.info(f"Triggered Twilio call SID: {call.sid} to {target_number}")
         return {
@@ -101,6 +115,15 @@ def trigger_twilio_call(
         }
 
 
+def _get_twilio_client():
+    account_sid = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
+    auth_token = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
+    twilio_phone = os.getenv("TWILIO_PHONE_NUMBER", "").strip()
+    if account_sid and auth_token and twilio_phone:
+        return Client(account_sid, auth_token), twilio_phone
+    return None, ""
+
+
 async def _verify_call_status_task(
     call_sid: str, topic: str, to_num: str, call_id: int
 ) -> None:
@@ -118,7 +141,7 @@ async def _verify_call_status_task(
             f"Verified Twilio call {call_sid}: status={status}, duration={duration}s"
         )
 
-        if status in ("no-answer", "busy", "canceled", "failed") or duration == 0:
+        if status in ("no-answer", "busy", "canceled", "failed"):
             db.log_call_outcome(
                 call_type="SIP_OUTBOUND",
                 topic=topic,
@@ -129,6 +152,7 @@ async def _verify_call_status_task(
             )
             db.mark_scheduled_call_completed(call_id, status="failed")
         else:
+            # Answered / Completed / In-progress call
             db.log_call_outcome(
                 call_type="SIP_OUTBOUND",
                 topic=topic,
