@@ -47,8 +47,8 @@ async def check_support_replies(db_path: Path | str = db.DB_PATH) -> None:
 
     def fetch_emails():
         try:
-            # Set 5-second socket timeout to prevent blocking
-            mail = imaplib.IMAP4_SSL("imap.gmail.com", timeout=5)
+            # Set 15-second socket timeout to allow stable IMAP SSL handshake
+            mail = imaplib.IMAP4_SSL("imap.gmail.com", timeout=15)
             mail.login(sender_email, sender_password)
             mail.select("inbox")
 
@@ -59,39 +59,31 @@ async def check_support_replies(db_path: Path | str = db.DB_PATH) -> None:
                 return
 
             email_ids = messages[0].split()
-            # Fast, lightweight scan: strictly last 5 emails only
-            recent_ids = email_ids[-5:]
+            # Inspect top 10 most recent emails
+            recent_ids = email_ids[-10:]
 
-            for num in recent_ids:
-                _, data = mail.fetch(num, "(RFC822)")
-                if not data or not data[0]:
+            for e_id in reversed(recent_ids):
+                status, data = mail.fetch(e_id, "(RFC822)")
+                if status != "OK" or not data:
                     continue
 
                 raw_email = data[0][1]
-                msg_obj = email.message_from_bytes(raw_email)
+                msg = email.message_from_bytes(raw_email)
 
-                sender_header = decode_mime_header(msg_obj["From"] or "")
-                raw_subject = msg_obj["Subject"] or ""
-                subject = decode_mime_header(raw_subject)
-                body = ""
+                subject = decode_mime_header(msg.get("Subject", ""))
+                sender_header = decode_mime_header(msg.get("From", ""))
 
-                if msg_obj.is_multipart():
-                    for part in msg_obj.walk():
-                        if part.get_content_type() == "text/plain":
-                            body = part.get_payload(decode=True).decode(errors="ignore")
-                            break
-                else:
-                    body = msg_obj.get_payload(decode=True).decode(errors="ignore")
+                ticket_id = extract_ticket_id(subject)
+                if not ticket_id:
+                    # Check body snippet for Ticket ID
+                    body = extract_text_body(msg)
+                    ticket_id = extract_ticket_id(body)
 
-                # Search Ticket ID format (e.g., KM-EFD53D) in decoded subject or body
-                search_text = f"{subject} {raw_subject} {body}"
-                match = re.search(r"KM-[A-F0-9]{6}", search_text, re.IGNORECASE)
-                if match:
-                    ticket_id = match.group(0).upper()
-
-                    # Clean thread replies (strip previous quoted text)
+                if ticket_id:
+                    body = extract_text_body(msg)
+                    # Extract only the newly typed reply text, stripping quoted thread
                     clean_reply = re.split(
-                        r"\r?\nOn .* written?:|\r?\nOn .* wrote:|\r?\n---------- Forwarded message ---------",
+                        r"(?i)(On\s+.*wrote:|From:|Sent:|>)",
                         body,
                     )[0].strip()
 
@@ -110,6 +102,8 @@ async def check_support_replies(db_path: Path | str = db.DB_PATH) -> None:
                             )
 
             mail.logout()
+        except (TimeoutError, OSError) as te:
+            logger.debug(f"[IMAP Poller Timeout]: {te}")
         except Exception as e:
             logger.error(f"[IMAP Poller Error]: {e}")
 
