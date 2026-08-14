@@ -1,11 +1,11 @@
 import asyncio
 import email
-from email.header import decode_header
 import imaplib
 import logging
 import multiprocessing
 import os
 import re
+from email.header import decode_header
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -33,6 +33,35 @@ def decode_mime_header(header_value: str) -> str:
         return " ".join(parts)
     except Exception:
         return str(header_value)
+
+
+def extract_ticket_id(text: str) -> str | None:
+    """Extracts ticket ID (e.g. KM-1A2B3C or KM-TST101) from subject or body text."""
+    if not text:
+        return None
+    match = re.search(r"KM-[A-Za-z0-9\-]+", text)
+    if match:
+        return match.group(0)
+    return None
+
+
+def extract_text_body(msg: email.message.Message) -> str:
+    """Extracts plain text body from raw email message."""
+    if msg.is_multipart():
+        for part in msg.walk():
+            content_type = part.get_content_type()
+            content_disposition = str(part.get("Content-Disposition", ""))
+            if content_type == "text/plain" and "attachment" not in content_disposition:
+                payload = part.get_payload(decode=True)
+                if payload:
+                    charset = part.get_content_charset() or "utf-8"
+                    return payload.decode(charset, errors="ignore")
+    else:
+        payload = msg.get_payload(decode=True)
+        if payload:
+            charset = msg.get_content_charset() or "utf-8"
+            return payload.decode(charset, errors="ignore")
+    return ""
 
 
 async def check_support_replies(db_path: Path | str = db.DB_PATH) -> None:

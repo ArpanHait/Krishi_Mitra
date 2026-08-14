@@ -129,7 +129,7 @@ async def _verify_call_status_task(
 ) -> None:
     """Wait 12s after dialing then check Twilio API to see if call was answered or declined."""
     await asyncio.sleep(12)
-    client, twilio_phone = _get_twilio_client()
+    client, _twilio_phone = _get_twilio_client()
     if not client or not call_sid or call_sid.startswith("SIM_"):
         return
 
@@ -215,7 +215,7 @@ async def _poll_due_calls_loop():
                 call_sid = res.get("call_sid")
                 if call_sid and not call_sid.startswith("SIM_"):
                     # Launch non-blocking status verifier to check if answered vs declined
-                    asyncio.create_task(
+                    _task = asyncio.create_task(
                         _verify_call_status_task(
                             call_sid=call_sid,
                             topic=topic,
@@ -223,6 +223,7 @@ async def _poll_due_calls_loop():
                             call_id=call_id,
                         )
                     )
+                    _ = _task
                 else:
                     is_success = res.get("success", False) and not res.get(
                         "suppressed", False

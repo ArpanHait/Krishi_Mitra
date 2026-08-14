@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 import re
@@ -45,6 +44,9 @@ SYSTEM_PROMPT = """You are Krishi Mitra (🌾), an agricultural voice advisor sp
   * ABSOLUTELY ZERO HINDI WORDS AND ZERO DEVANAGARI CHARACTERS WHEN THE USER SPEAKS IN BENGALI!
 - IF THE USER SPEAKS OR TYPES IN DEVANAGARI HINDI OR HINGLISH:
   * YOU MUST RESPOND 100% IN PURE DEVANAGARI HINDI (देवनागरी हिंदी) for BOTH "tts_text" AND "display_text"!
+- NO DUAL-SCRIPT / PARENTHETICAL ENGLISH DUPLICATES (PRONUNCIATION FIX):
+  * ABSOLUTELY NEVER write English transliterated names or English words in parentheses after native script words (e.g. NEVER write 'अर्ली ब्लाइट' (Early Blight) or 'मन्कोज़ेब' (Mancozeb 75% WP) or 'घेरे' (rings))!
+  * Write ONLY the native script term itself (e.g. 'अर्ली ब्लाइट या लेट ब्लाइट', 'घेरे', 'मैनकोज़ेब') without any duplicate English parenthetical translations, so TTS reads each word smoothly once without repeating terms twice!
 
 ### 1.1 DATA DELETION & CALL ANALYTICS RULES
 - WHEN USER ASKS ABOUT CALL HISTORY / CALL STATS / ANALYTICS ("tell me about calling history", "what are my call stats?", "how many successful calls?"):
@@ -295,7 +297,7 @@ You have access to tools `create_escalation` and `check_ticket_status`.
    - When the farmer asks if the support officer replied or asks for ticket status (e.g. "Did the support officer reply?", "What is the status of my ticket?", "Check my last ticket"):
      * Call `check_ticket_status(farmer_name=...)` immediately! NEVER say you don't have real-time access.
      * IF `has_officer_replied` is true: Read out the officer's response text warmly to the farmer.
-     * IF `has_officer_replied` is false / status is OPEN: Inform the farmer warmly: "Your ticket #[ticket_id] is active and currently being reviewed by our agricultural officer. They will reply shortly." 
+     * IF `has_officer_replied` is false / status is OPEN: Inform the farmer warmly: "Your ticket #[ticket_id] is active and currently being reviewed by our agricultural officer. They will reply shortly."
 
 1. ESCALATION TRIGGERS:
    - TRIGGER A (DATA MISSING/OUTDATED): Mandi market prices or weather forecasts are unavailable or stale.
@@ -412,6 +414,16 @@ class Assistant(Agent):
     async def on_enter(self) -> None:
         """Invoked when Krishi Mitra active agent starts or resumes control."""
         logger.info("Active agent: KrishiMitra (Anisha Voice).")
+        import asyncio
+
+        async def _trigger_reply():
+            await asyncio.sleep(0.15)
+            sess = getattr(self, "session", None)
+            if sess:
+                await sess.generate_reply()
+
+        _task = asyncio.create_task(_trigger_reply())
+        _ = _task
 
     @function_tool
     async def transfer_to_crop_specialist(

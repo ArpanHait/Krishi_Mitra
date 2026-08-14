@@ -1,7 +1,8 @@
+import contextlib
 import tempfile
 from pathlib import Path
+
 import pytest
-from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
 import api_server
@@ -20,10 +21,8 @@ def temp_db(monkeypatch):
     yield db_path
 
     if db_path.exists():
-        try:
+        with contextlib.suppress(Exception):
             db_path.unlink()
-        except Exception:
-            pass
 
 
 def test_log_call_outcome_and_metrics(temp_db):

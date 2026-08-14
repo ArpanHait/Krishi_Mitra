@@ -1,3 +1,4 @@
+import contextlib
 import tempfile
 import time
 from pathlib import Path
@@ -15,10 +16,8 @@ def temp_db(monkeypatch):
     monkeypatch.setattr("tools.send_email_alert", lambda *args, **kwargs: True)
     yield db_path
     if db_path.exists():
-        try:
+        with contextlib.suppress(Exception):
             db_path.unlink()
-        except Exception:
-            pass
 
 
 def test_db_schema_columns(temp_db):

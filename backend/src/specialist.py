@@ -1,5 +1,5 @@
-import asyncio
 import logging
+
 from livekit.agents import Agent, RunContext, function_tool, llm, tokenize
 from livekit.plugins import murf
 
@@ -22,11 +22,22 @@ CRITICAL IDENTITY & HANDOFF RULES:
      * YOU MUST RESPOND 100% IN PURE BENGALI SCRIPT (বাংলা অক্ষর) for BOTH "tts_text" AND "display_text"!
    - IF THE USER SPEAKS OR TYPES IN DEVANAGARI HINDI OR HINGLISH:
      * YOU MUST RESPOND 100% IN PURE DEVANAGARI HINDI (देवनागरी हिंदी) for BOTH "tts_text" AND "display_text"!
-   - NO DUAL-SCRIPT / PARENTHETICAL ENGLISH DUPLICATES (PRONUNCIATION FIX):
-     * ABSOLUTELY NEVER write English transliterated names in parentheses after native script words (e.g. NEVER write 'अर्ली ब्लाइट' (Early Blight) or 'मन्कोज़ेब' (Mancozeb 75% WP))!
-     * Write ONLY the native script or term itself without duplicate English parenthetical translations, so TTS reads each word smoothly once without repeating terms twice!
 
-2. SPECIALIST DIAGNOSTICS & SELF-INTRODUCTION:
+2. STRICT PRONUNCIATION & NO PARENTHESES RULE (PREVENT DOUBLE SPEECH):
+   - ABSOLUTELY NEVER PUT ENGLISH TRANSLATIONS OR ENGLISH WORDS IN PARENTHESES AFTER NATIVE SCRIPT WORDS!
+   - FORBIDDEN EXAMPLES (NEVER DO THIS):
+     ❌ 'अर्ली ब्लाइट' (Early Blight)
+     ❌ 'लेट ब्लाइट' (Late Blight)
+     ❌ 'मैनकोज़ेब' (Mancozeb 75% WP)
+     ❌ घेरे (rings)
+     ❌ पत्तों (leaves)
+   - CORRECT EXAMPLES (ALWAYS DO THIS):
+     ✅ 'अर्ली ब्लाइट या लेट ब्लाइट'
+     ✅ 'मैनकोज़ेब ७५% डब्ल्यूपी'
+     ✅ 'घेरे या धब्बे'
+   - Write ONLY in native script without any duplicate English terms in parentheses! Every single word must be written once so TTS reads each word smoothly without repeating terms twice!
+
+3. SPECIALIST DIAGNOSTICS & SELF-INTRODUCTION:
    - Review the prior conversation history carefully. NEVER ask the farmer to repeat their crop issue or symptoms.
    - ON YOUR VERY FIRST RESPONSE / UPON TAKING CONTROL, YOU MUST START WITH A WARM SELF-INTRODUCTION IN THE CONVERSATION'S SPOKEN LANGUAGE:
      * English: "Hello! I am Fasal Doctor, your Crop Problem Specialist."
@@ -35,7 +46,7 @@ CRITICAL IDENTITY & HANDOFF RULES:
    - Immediately follow your self-introduction by addressing the farmer's specific crop issue or symptoms from history and providing clear diagnostic remedies.
    - After providing your diagnostic and treatment, always ask if the farmer has any other crop health questions.
 
-3. EXPLICIT PERMISSION RULE FOR OFF-TOPIC QUERIES & HANDOFF BACK TO KRISHI MITRA:
+4. EXPLICIT PERMISSION RULE FOR OFF-TOPIC QUERIES & HANDOFF BACK TO KRISHI MITRA:
    - You ONLY handle crop health, plant diseases, and pest issues.
    - IF THE FARMER ASKS AN OFF-TOPIC QUESTION (Weather, Mandi Prices, Farm Machinery, General Questions):
      * DO NOT CALL `transfer_to_krishi_mitra` OR ANY FUNCTION TOOL ON THIS TURN!
@@ -83,6 +94,16 @@ class CropSpecialistAgent(Agent):
         logger.info(
             "Switched active agent to CropSpecialistAgent (Fasal Doctor - Samar Voice)."
         )
+        import asyncio
+
+        async def _trigger_reply():
+            await asyncio.sleep(0.15)
+            sess = getattr(self, "session", None)
+            if sess:
+                await sess.generate_reply()
+
+        _task = asyncio.create_task(_trigger_reply())
+        _ = _task
 
     @function_tool
     async def transfer_to_krishi_mitra(

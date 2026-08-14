@@ -104,7 +104,7 @@ function StatePill({
           border: 'rgba(94,234,212,0.3)',
           dotColor: '#5eead4',
           dotAnim: 'animate-bounce',
-          text: 'Agent is speaking... / जवाब दे रहे हैं',
+          text: 'Answering... / जवाब दे रहे हैं',
         };
       case 'thinking':
         return {
@@ -201,11 +201,21 @@ export function AgentSessionView_01({
   const { state: agentState } = useAgent();
 
   // Minimal status text below the visualizer
+  let activeAgentName = 'Krishi Mitra';
+  const lastAgentMsg = messages.filter((m) => !m.from?.isLocal).at(-1)?.message || '';
+  if (
+    lastAgentMsg.includes('Fasal Doctor') ||
+    lastAgentMsg.includes('फ़सल डॉक्टर') ||
+    lastAgentMsg.includes('ফসল ডাক্তার')
+  ) {
+    activeAgentName = 'Fasal Doctor';
+  }
+
   let dynamicStatusText = preConnectMessage;
   if (agentState === 'listening') {
     dynamicStatusText = 'Listening… / सुन रहे हैं';
   } else if (agentState === 'speaking') {
-    dynamicStatusText = 'Krishi Mitra is answering… / जवाब दे रहे हैं';
+    dynamicStatusText = `${activeAgentName} is answering… / जवाब दे रहे हैं`;
   } else if (agentState === 'thinking') {
     dynamicStatusText = 'Thinking… / सोच रहे हैं';
   }

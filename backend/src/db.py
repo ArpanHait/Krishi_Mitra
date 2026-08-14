@@ -653,12 +653,12 @@ def prune_old_resolved_tickets(limit: int = 3, db_path: Path | str = DB_PATH) ->
     """Retains at most limit resolved tickets by deleting the oldest ones based on updated_at timestamp."""
     init_db(db_path)
     query = """
-    DELETE FROM escalations 
-    WHERE status = 'RESOLVED' 
+    DELETE FROM escalations
+    WHERE status = 'RESOLVED'
     AND ticket_id NOT IN (
-        SELECT ticket_id FROM escalations 
-        WHERE status = 'RESOLVED' 
-        ORDER BY updated_at DESC 
+        SELECT ticket_id FROM escalations
+        WHERE status = 'RESOLVED'
+        ORDER BY updated_at DESC
         LIMIT ?
     )
     """
@@ -701,7 +701,7 @@ def update_officer_reply(
 
         cursor.execute(
             """
-            UPDATE escalations 
+            UPDATE escalations
             SET officer_response = ?, status = 'OFFICER_REPLIED', has_unread_reply = 1, updated_at = ?
             WHERE ticket_id = ?
             """,
