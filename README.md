@@ -129,26 +129,97 @@ flowchart LR
 - `uv run pytest`: **26 backend tests — 100% passing**.
 - `uv run ruff check` & `uv run ruff format`: **0 errors**.
 
-#### New Environment Variable (Day 6)
-Add to `backend/.env.local`:
-```env
-# Twilio Outbound Calls (Day 6)
-TWILIO_ACCOUNT_SID=your_twilio_account_sid
-TWILIO_AUTH_TOKEN=your_twilio_auth_token
-TWILIO_FROM_NUMBER=+1xxxxxxxxxx   # Your Twilio phone number
-MY_PHONE_NUMBER=+91xxxxxxxxxx     # Farmer's phone number (default)
-```
+---
+
+### 🔹 Day 7: Government Support Escalation System & Email Synchronization
+
+#### 📋 Support Ticket Generation & Database Persistence
+- **`escalate_to_human_officer` Tool** ([`agent.py`](backend/src/agent.py)): Dynamically creates structured escalation tickets (`KM-XXXXXX`) in SQLite `escalations` table when queries require human agricultural officer intervention (e.g. severe pest outbreaks, subsidy disputes, emergency crop alerts).
+- **SQLite Escalation Table (`escalations`)**: Tracks `ticket_id`, `farmer_name`, `topic`, `summary`, `urgency` (`Low`, `Medium`, `High`, `Emergency`), `status` (`OPEN`, `RESOLVED`, `IN_PROGRESS`), `language`, `preferred_followup`, `officer_response`, `has_unread_reply`, `created_at`, and `updated_at`.
+
+#### 📧 Automated Government Email Dispatch
+- **`email_dispatcher.py`** ([`email_dispatcher.py`](backend/src/email_dispatcher.py)): Asynchronously dispatches formatted HTML emails containing Ticket ID, Farmer Name, Topic, Urgency, Summary, and Preferred Follow-up mode to regional agricultural officers via SMTP (`smtp.gmail.com`).
+- **Automatic Background Trigger**: Whenever `escalate_to_human_officer` is invoked by Krishi Mitra, email dispatch runs in a background thread without blocking the voice session.
+
+#### 📥 Reverse Officer Reply Synchronization (IMAP Listener)
+- **`email_listener.py`** ([`email_listener.py`](backend/src/email_listener.py)): Background IMAP listener service (`imap.gmail.com`) that periodically scans officer reply emails containing Ticket IDs (`KM-XXXXXX`).
+- **Reply Text Extraction**: Automatically strips quoted email threads (`On ... wrote:`) and extracts the officer's newly typed response.
+- **SQLite Update**: Updates `officer_response` text and sets `has_unread_reply = 1` in `escalations` table.
+
+#### 🔌 REST API Server Suite
+- **`api_server.py`** ([`api_server.py`](backend/src/api_server.py)): Standalone aiohttp REST API server running on port `8080` (co-located on process loop) serving frontend proxy routes:
+  - `GET /api/escalations` — Returns all active support tickets.
+  - `GET /api/escalations/pending-count` — Returns pending ticket counts & unread reply flags.
+  - `POST /api/escalations/mark-read` — Marks unread officer replies as read.
+  - `POST /api/escalations/resolve` — Resolves ticket and prunes old resolved records.
+  - `POST /api/escalations/update-status` — Updates ticket status (`OPEN`, `RESOLVED`, `IN_PROGRESS`).
+  - `POST /api/escalations/sync-email` — Triggers on-demand instant email sync.
+
+---
+
+### 🔹 Day 8: Call Outcome Analytics & Unified Control Center Dashboard
+
+#### 📊 Call Outcome Tracking & Metrics Engine
+- **SQLite Call Metrics Table (`call_logs`)**: Records detailed telephony metadata for outbound phone calls: `call_id` (`CALL-XXXXXX`), `caller_id`, `call_type` (`SIP_OUTBOUND`), `topic`, `duration_seconds`, `outcome` (`SUCCESS` or `FAILED`), `failure_reason`, and `created_at`.
+- **Analytics Aggregator (`db.get_call_analytics`)**: Computes live metrics: `total_calls`, `successful_calls`, `declined_calls`, `system_failed_calls`, `failed_calls`, `success_rate` %, and recent call history logs.
+
+#### ⚡ Event-Driven Twilio Status Webhook (`POST /api/twilio/status`)
+- **Real-Time Event Processing**: Attaches `status_callback` to Twilio outbound calls. Twilio posts real-time events to `/api/twilio/status`:
+  - **Answered & Completed Call** → Twilio posts `CallStatus=completed` / `answered`, immediately logging **`SUCCESS`** 🟢 with exact call duration into SQLite.
+  - **Declined or Unanswered Call** → Twilio posts `CallStatus=no-answer` / `busy` / `canceled`, immediately logging **`FAILED`** 🟡 (`DECLINED`) into SQLite.
+- **Mobile-Phone-Only Scope**: Web browser voice & text chat sessions are 100% excluded from analytics tracking — only real mobile phone calls via Twilio generate call records.
+
+#### 🗣️ Dedicated Voice Agent Tools
+- **`get_call_history_summary` Tool**: Enables Krishi Mitra to fetch live SQLite metrics and speak out exact call statistics (*"You have 3 total calls with a 100% success rate!"*) when asked by the farmer.
+- **`delete_call_history` Tool**: Wipes call history metrics to 0 on demand (`DELETE FROM call_logs`) while keeping personal farmer profiles (Name, Location, Crops) 100% safe.
+
+#### 🎛️ Unified Control Center Dashboard UI
+- **Tabbed Interface (`ticket-dashboard.tsx`)**: Replaces the single ticket modal with a unified 2-tab Control Center (`Call Analytics` & `Support Tickets`).
+- **5 Visual Metric Cards Grid**: Displays `Total Calls` (White), `Successful` (Emerald), `Declined` (Amber), `Failed` (Rose), and `Success Rate %` (Teal).
+- **Redesigned History Table**: Shows local time formatting (`02:54 PM`), topic summaries, call duration, and distinct status badges.
+- **Instant Refresh on Open**: Opens in under 5ms by pre-fetching SQLite stats directly when the modal triggers.
+
+#### 🎤 STT Endpointing Buffer Fix
+- **Deepgram STT Optimization**: Increased `endpointing_ms` from `500` to `800` ms in `agent.py`, allowing natural speech pauses without WebSocket disconnects (code 1006 / net0001).
+
+---
+
+### 🔹 Day 9: Two-Way Seamless Multi-Agent Handoff System (Krishi Mitra & Fasal Doctor)
+
+#### 🧑‍⚕️ Crop Problem Specialist (`Fasal Doctor`)
+- **`CropSpecialistAgent` Class** ([`specialist.py`](backend/src/specialist.py)): Built standalone specialist agent persona dedicated to plant pathology, diagnosing crop pests, fungal infections, yellow leaves, soil nutrient deficiencies, and recommending chemical/organic remedies with safe dosages.
+- **Murf Falcon TTS (Samar Voice)**: Configured with **`en-IN-samar`** (Samar — Indian English male voice), creating a clear audio distinction from Krishi Mitra's female voice (`Anisha`).
+
+#### 🔄 Two-Way LiveKit Agent Handoff Architecture
+- **Path A: Krishi Mitra ➡️ Fasal Doctor (`transfer_to_crop_specialist`)**:
+  - Automatically invoked when the farmer asks plant health / disease questions (*"My tomato leaves are turning yellow with brown spots"*).
+  - Krishi Mitra verbally announces the transfer in the farmer's language (*"Main aapko hamare Crop Problem Specialist se connect kar raha hoon..."*).
+  - Passes `chat_ctx.copy(exclude_instructions=True)` so `Fasal Doctor` receives full context and **never asks the farmer to repeat their problem**.
+- **Path B: Fasal Doctor ➡️ Krishi Mitra (`transfer_to_krishi_mitra`)**:
+  - **Issue Resolved**: When the crop issue is resolved (*"Thank you, nothing else needed"*), `Fasal Doctor` announces return and calls `transfer_to_krishi_mitra(reason="resolved")`.
+  - **Out of Scope Query**: If asked about weather, mandi prices, or call scheduling, `Fasal Doctor` explains its scope and calls `transfer_to_krishi_mitra(reason="out_of_scope_query")`.
+  - **Seamless Resume**: Krishi Mitra resumes in `Anisha` voice acknowledging context (*"Asha karta hoon ki hamare Crop Specialist ne aapki samasya suljha di hogi!..."*).
+
+#### 🧪 Day 9 Test Suite
+- Added `tests/test_day9_handoff.py` validating 5 handoff workflows:
+  1. `test_general_query_stays_with_krishi_mitra`
+  2. `test_crop_disease_triggers_specialist_handoff`
+  3. `test_specialist_transfers_back_to_krishi_mitra_when_resolved`
+  4. `test_specialist_transfers_back_on_out_of_scope_query`
+  5. `test_specialist_responds_in_hindi_when_prompted_in_hindi`
+- **42 / 42 backend pytest cases passed (100%)**.
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Backend**: Python 3.11+, LiveKit Agents SDK (`livekit-agents ~1.4`), SQLite3, `httpx`, `uv`
+- **Backend**: Python 3.11+, LiveKit Agents SDK (`livekit-agents ~1.4`), SQLite3, `httpx`, `aiohttp`, `uv`
 - **Speech-to-Text (STT)**: Deepgram Nova-3 (Multilingual + Custom Indic Keyterm Boosting)
 - **LLM**: Google Gemini 3.1 Flash Lite (`livekit-plugins-google`)
 - **Text-to-Speech (TTS)**: Murf Falcon (`livekit-plugins-murf`, Anisha voice)
 - **Voice Activity & Turn Detection**: Silero VAD + LiveKit Multilingual Turn Detector
-- **Outbound Telephony**: Twilio Programmable Voice API (`twilio` Python SDK)
+- **Outbound Telephony**: Twilio Programmable Voice API (`twilio` Python SDK + Webhook Callbacks)
+- **Email Synchronization**: SMTP (`smtplib`) + IMAP (`imaplib`) Background Workers
 - **Frontend**: Next.js 14, React, TypeScript, Tailwind CSS, LiveKit Agents UI Components
 
 ---
@@ -183,11 +254,16 @@ GOOGLE_API_KEY=your_gemini_api_key
 # External Market API (Day 5)
 DATA_GOV_API_KEY=your_agmarknet_api_key
 
-# Twilio Outbound Calls (Day 6)
+# Twilio Outbound Calls (Day 6 & Day 8)
 TWILIO_ACCOUNT_SID=your_twilio_account_sid
 TWILIO_AUTH_TOKEN=your_twilio_auth_token
 TWILIO_FROM_NUMBER=+1xxxxxxxxxx
 MY_PHONE_NUMBER=+91xxxxxxxxxx
+
+# Government Email Synchronization (Day 7)
+SMTP_SENDER_EMAIL=your_email@gmail.com
+SMTP_SENDER_PASSWORD=your_app_password
+OFFICER_EMAIL=officer_email@gmail.com
 ```
 
 ---
@@ -208,7 +284,7 @@ chmod +x start_app.sh
 ### Option B: Separate Terminals
 
 ```bash
-# Terminal 1: Backend Agent
+# Terminal 1: Backend Agent & REST API Server
 cd backend
 uv sync
 uv run python src/agent.py dev
@@ -229,22 +305,30 @@ Open **http://localhost:3000** in your browser, click **Start talking**, and con
 murf-livekit-starter/
 ├── backend/
 │   ├── src/
-│   │   ├── agent.py           # Entrypoint — LiveKit voice pipeline & system prompt
-│   │   ├── tools.py           # Tools: Weather, Mandi, Scheduling, Gist Extraction
-│   │   ├── db.py              # SQLite profile memory management
-│   │   ├── outbound_dialer.py # Twilio outbound phone call poller & dialer (Day 6)
+│   │   ├── agent.py           # Entrypoint — Voice pipeline, system prompt & Krishi Mitra agent
+│   │   ├── specialist.py      # Crop Problem Specialist Agent (Fasal Doctor - Samar Voice) (Day 9)
+│   │   ├── tools.py           # Weather, Mandi, Scheduling & Escalation tools
+│   │   ├── db.py              # SQLite profile, escalations & call analytics storage
+│   │   ├── api_server.py      # REST API server & Twilio Webhook handler (Day 7 & 8)
+│   │   ├── email_dispatcher.py# Government officer HTML email dispatcher (Day 7)
+│   │   ├── email_listener.py  # IMAP officer reply synchronization worker (Day 7)
+│   │   ├── outbound_dialer.py # Twilio outbound call poller & status callback (Day 6 & 8)
 │   │   └── mandi_rates.json   # Benchmark market fallback rates
 │   ├── tests/
 │   │   ├── test_agent.py               # LLM-judged agent behaviour evals
 │   │   ├── test_day5_tools.py          # Weather & Mandi tool unit tests
 │   │   ├── test_day6_telephony.py      # Outbound call & confirmation tests (Day 6)
-│   │   ├── test_memory.py              # SQLite memory & topic gist tests (Day 6)
+│   │   ├── test_day7_escalation.py     # Government escalation ticket tests (Day 7)
+│   │   ├── test_day7_email_sync.py       # Officer email reply sync tests (Day 7)
+│   │   ├── test_day8_analytics.py      # Call outcome analytics unit tests (Day 8)
+│   │   ├── test_day9_handoff.py        # Two-Way agent handoff unit tests (Day 9)
+│   │   ├── test_memory.py              # SQLite memory & topic gist tests
 │   │   └── test_full_memory_flow.py    # End-to-end profile persistence test
 │   ├── krishi_memory.db       # SQLite database file
 │   └── pyproject.toml         # Backend dependencies & Ruff config
 ├── frontend/
-│   ├── app/                   # Next.js pages & LiveKit token API route
-│   ├── components/            # Voice visualizer, controls, header animations
+│   ├── app/                   # Next.js pages, API routes & token handler
+│   ├── components/            # Control Center dashboard, visualizer, controls
 │   └── app-config.ts          # Branding, accent colors, and app metadata
 ├── start_app.ps1              # Windows startup script
 ├── start_app.sh               # Linux/macOS startup script
@@ -259,7 +343,7 @@ Run automated unit and integration tests:
 
 ```bash
 cd backend
-uv run pytest                  # Run all 26 backend test cases (100% passing)
+uv run pytest                  # Run all 37 backend test cases (100% passing)
 uv run ruff check .            # Linting
 uv run ruff format .           # Code formatting
 ```

@@ -4,14 +4,18 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Activity,
-  BarChart3,
+  Bot,
   CheckCircle2,
   Clock,
+  Cloud,
   Headset,
   MessageSquare,
   PhoneCall,
   PhoneOff,
+  PlugZap,
   RefreshCw,
+  ShoppingCart,
+  TrendingUp,
   X,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
@@ -52,13 +56,40 @@ export interface AnalyticsData {
   recent_logs: CallLog[];
 }
 
+interface ApiToolStats {
+  total: number;
+  successful: number;
+  failed: number;
+}
+
+interface AgentResponseStats {
+  name: string;
+  icon: string;
+  total: number;
+  successful: number;
+  failed: number;
+}
+
+const MOCK_API_STATS: Record<'mandi' | 'weather', ApiToolStats> = {
+  mandi: { total: 24, successful: 22, failed: 2 },
+  weather: { total: 18, successful: 18, failed: 0 },
+};
+
+const MOCK_AGENT_STATS: AgentResponseStats[] = [
+  { name: 'Krishi Mitra', icon: '🌾', total: 52, successful: 49, failed: 3 },
+  { name: 'Fasal Doctor', icon: '👨‍⚕️', total: 22, successful: 20, failed: 2 },
+];
+
 interface TicketDashboardProps {
   buttonStyle?: 'icon-only' | 'header-button';
 }
 
 export function TicketDashboard({ buttonStyle = 'icon-only' }: TicketDashboardProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'analytics' | 'tickets'>('analytics');
+  const [activeTab, setActiveTab] = useState<'api-tools' | 'tickets' | 'agent-responses'>(
+    'api-tools'
+  );
+  const [activeApiSubTab, setActiveApiSubTab] = useState<'voice' | 'mandi' | 'weather'>('voice');
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsData>({
     total_calls: 0,
@@ -304,18 +335,18 @@ export function TicketDashboard({ buttonStyle = 'icon-only' }: TicketDashboardPr
               </div>
             </div>
 
-            {/* Top Tab Switcher */}
+            {/* Top Tab Switcher — 3 tabs */}
             <div className="flex border-b border-white/15 bg-white/5 px-6 pt-2 backdrop-blur-md">
               <button
-                onClick={() => setActiveTab('analytics')}
+                onClick={() => setActiveTab('api-tools')}
                 className={`flex flex-1 items-center justify-center gap-2 rounded-t-xl border-b-2 py-3 text-xs font-bold transition-all ${
-                  activeTab === 'analytics'
+                  activeTab === 'api-tools'
                     ? 'border-[#52b788] bg-[#52b788]/20 text-[#74c69d]'
                     : 'border-transparent text-slate-300 hover:bg-white/5 hover:text-white'
                 }`}
               >
-                <BarChart3 className="h-4 w-4" />
-                <span>Call Analytics</span>
+                <PlugZap className="h-4 w-4" />
+                <span>API Tool Calls</span>
               </button>
               <button
                 onClick={() => setActiveTab('tickets')}
@@ -333,155 +364,284 @@ export function TicketDashboard({ buttonStyle = 'icon-only' }: TicketDashboardPr
                   </span>
                 )}
               </button>
+              <button
+                onClick={() => setActiveTab('agent-responses')}
+                className={`flex flex-1 items-center justify-center gap-2 rounded-t-xl border-b-2 py-3 text-xs font-bold transition-all ${
+                  activeTab === 'agent-responses'
+                    ? 'border-[#52b788] bg-[#52b788]/20 text-[#74c69d]'
+                    : 'border-transparent text-slate-300 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                <Bot className="h-4 w-4" />
+                <span>Agent Responses</span>
+              </button>
             </div>
 
             {/* Modal Body */}
             <div className="flex-1 space-y-4 overflow-y-auto p-6">
-              {/* TAB 1: CALL ANALYTICS (Day 8 Core) */}
-              {activeTab === 'analytics' && (
-                <div className="space-y-6">
-                  {/* Metric Cards Grid */}
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-                    <div className="flex flex-col items-center justify-center rounded-2xl border border-white/15 bg-white/5 p-3.5 text-center backdrop-blur-md">
-                      <p className="text-[10px] font-bold tracking-wider text-slate-300 uppercase">
-                        Total Calls
-                      </p>
-                      <p className="mt-1 text-2xl font-black text-white">{analytics.total_calls}</p>
-                    </div>
-
-                    <div className="flex flex-col items-center justify-center rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-3.5 text-center backdrop-blur-md">
-                      <p className="text-[10px] font-bold tracking-wider text-emerald-300 uppercase">
-                        Successful
-                      </p>
-                      <p className="mt-1 text-2xl font-black text-emerald-400">
-                        {analytics.successful_calls}
-                      </p>
-                    </div>
-
-                    <div className="flex flex-col items-center justify-center rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3.5 text-center backdrop-blur-md">
-                      <p className="text-[10px] font-bold tracking-wider text-amber-300 uppercase">
-                        Declined
-                      </p>
-                      <p className="mt-1 text-2xl font-black text-amber-400">
-                        {analytics.declined_calls ?? 0}
-                      </p>
-                    </div>
-
-                    <div className="flex flex-col items-center justify-center rounded-2xl border border-rose-500/40 bg-rose-500/10 p-3.5 text-center backdrop-blur-md">
-                      <p className="text-[10px] font-bold tracking-wider text-rose-300 uppercase">
-                        Failed
-                      </p>
-                      <p className="mt-1 text-2xl font-black text-rose-400">
-                        {analytics.system_failed_calls ?? analytics.failed_calls}
-                      </p>
-                    </div>
-
-                    <div className="flex flex-col items-center justify-center rounded-2xl border border-emerald-400/40 bg-white/5 p-3.5 text-center backdrop-blur-md">
-                      <p className="text-[10px] font-bold tracking-wider text-slate-300 uppercase">
-                        Success Rate
-                      </p>
-                      <p className="mt-1 text-2xl font-black text-emerald-300">
-                        {analytics.success_rate}%
-                      </p>
-                    </div>
+              {/* TAB 1: API TOOL CALLS */}
+              {activeTab === 'api-tools' && (
+                <div className="space-y-5">
+                  {/* Sub-tab pill switcher */}
+                  <div className="flex gap-2 rounded-2xl border border-white/10 bg-white/5 p-1.5 backdrop-blur-md">
+                    {[
+                      {
+                        key: 'voice' as const,
+                        label: 'Voice Call',
+                        icon: <PhoneCall className="h-3.5 w-3.5" />,
+                      },
+                      {
+                        key: 'mandi' as const,
+                        label: 'Mandi API',
+                        icon: <ShoppingCart className="h-3.5 w-3.5" />,
+                      },
+                      {
+                        key: 'weather' as const,
+                        label: 'Weather API',
+                        icon: <Cloud className="h-3.5 w-3.5" />,
+                      },
+                    ].map(({ key, label, icon }) => (
+                      <button
+                        key={key}
+                        onClick={() => setActiveApiSubTab(key)}
+                        className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-bold transition-all ${
+                          activeApiSubTab === key
+                            ? 'bg-[#52b788] text-[#0c2419] shadow-sm'
+                            : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                        }`}
+                      >
+                        {icon}
+                        <span>{label}</span>
+                      </button>
+                    ))}
                   </div>
 
-                  {/* Recent Call Logs Table */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-bold text-white">Recent Call Logs</h3>
-                      <span className="text-xs text-slate-300">Privacy-Safe Call Metrics</span>
-                    </div>
-
-                    <div className="overflow-hidden rounded-2xl border border-white/15 bg-white/5 backdrop-blur-md">
-                      {analytics.recent_logs.length === 0 ? (
-                        <div className="flex h-32 flex-col items-center justify-center gap-1.5 p-6 text-center text-slate-300">
-                          <PhoneCall className="h-6 w-6 text-slate-400" />
-                          <p className="text-xs font-medium">No recent call logs recorded</p>
+                  {/* Voice Call sub-tab */}
+                  {activeApiSubTab === 'voice' && (
+                    <div className="space-y-5">
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                        <div className="flex flex-col items-center justify-center rounded-2xl border border-white/15 bg-white/5 p-3.5 text-center backdrop-blur-md">
+                          <p className="text-[10px] font-bold tracking-wider text-slate-300 uppercase">
+                            Total Calls
+                          </p>
+                          <p className="mt-1 text-2xl font-black text-white">
+                            {analytics.total_calls}
+                          </p>
                         </div>
-                      ) : (
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left text-xs text-slate-200">
-                            <thead className="border-b border-white/10 bg-white/5 text-[10px] tracking-wider text-slate-300 uppercase">
-                              <tr>
-                                <th className="px-4 py-3">Call ID</th>
-                                <th className="px-4 py-3">Time</th>
-                                <th className="px-4 py-3">Topic</th>
-                                <th className="px-4 py-3">Duration</th>
-                                <th className="px-4 py-3">Outcome</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-white/10">
-                              {analytics.recent_logs.map((log) => {
-                                const isDeclined =
-                                  log.outcome === 'FAILED' &&
-                                  log.failure_reason &&
-                                  /unanswered|declined|busy|canceled|pick/i.test(
-                                    log.failure_reason
-                                  );
+                        <div className="flex flex-col items-center justify-center rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-3.5 text-center backdrop-blur-md">
+                          <p className="text-[10px] font-bold tracking-wider text-emerald-300 uppercase">
+                            Successful
+                          </p>
+                          <p className="mt-1 text-2xl font-black text-emerald-400">
+                            {analytics.successful_calls}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-center justify-center rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3.5 text-center backdrop-blur-md">
+                          <p className="text-[10px] font-bold tracking-wider text-amber-300 uppercase">
+                            Declined
+                          </p>
+                          <p className="mt-1 text-2xl font-black text-amber-400">
+                            {analytics.declined_calls ?? 0}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-center justify-center rounded-2xl border border-rose-500/40 bg-rose-500/10 p-3.5 text-center backdrop-blur-md">
+                          <p className="text-[10px] font-bold tracking-wider text-rose-300 uppercase">
+                            Failed
+                          </p>
+                          <p className="mt-1 text-2xl font-black text-rose-400">
+                            {analytics.system_failed_calls ?? analytics.failed_calls}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-center justify-center rounded-2xl border border-emerald-400/40 bg-white/5 p-3.5 text-center backdrop-blur-md">
+                          <p className="text-[10px] font-bold tracking-wider text-slate-300 uppercase">
+                            Success Rate
+                          </p>
+                          <p className="mt-1 text-2xl font-black text-emerald-300">
+                            {analytics.success_rate}%
+                          </p>
+                        </div>
+                      </div>
 
-                                return (
-                                  <tr
-                                    key={log.call_id}
-                                    className="transition-colors hover:bg-white/5"
-                                  >
-                                    <td className="px-4 py-3 font-mono font-bold text-[#74c69d]">
-                                      {log.call_id}
-                                    </td>
-                                    <td className="px-4 py-3 font-medium whitespace-nowrap text-slate-300">
-                                      {log.created_at
-                                        ? new Date(log.created_at).toLocaleTimeString([], {
-                                            hour: '2-digit',
-                                            minute: '2-digit',
-                                          })
-                                        : 'Recently'}
-                                    </td>
-                                    <td className="max-w-[180px] truncate px-4 py-3 font-medium text-white">
-                                      {log.topic}
-                                    </td>
-                                    <td className="px-4 py-3 font-mono text-slate-300">
-                                      {log.duration_seconds}s
-                                    </td>
-                                    <td className="px-4 py-3">
-                                      {log.outcome === 'SUCCESS' ? (
-                                        <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/50 bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
-                                          <CheckCircle2 className="h-3 w-3" />
-                                          SUCCESS
-                                        </span>
-                                      ) : isDeclined ? (
-                                        <span
-                                          title={
-                                            log.failure_reason ||
-                                            'Call unanswered or declined by user'
-                                          }
-                                          className="inline-flex items-center gap-1 rounded-md border border-amber-500/50 bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-300"
-                                        >
-                                          <PhoneOff className="h-3 w-3" />
-                                          DECLINED
-                                        </span>
-                                      ) : (
-                                        <span
-                                          title={log.failure_reason || 'System Error'}
-                                          className="inline-flex items-center gap-1 rounded-md border border-rose-500/50 bg-rose-500/20 px-2 py-0.5 text-[10px] font-bold text-rose-300"
-                                        >
-                                          <PhoneOff className="h-3 w-3" />
-                                          FAILED
-                                        </span>
-                                      )}
-                                    </td>
+                      {/* Recent Call Logs Table */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-sm font-bold text-white">Recent Call Logs</h3>
+                          <span className="text-xs text-slate-300">Privacy-Safe Call Metrics</span>
+                        </div>
+                        <div className="overflow-hidden rounded-2xl border border-white/15 bg-white/5 backdrop-blur-md">
+                          {analytics.recent_logs.length === 0 ? (
+                            <div className="flex h-32 flex-col items-center justify-center gap-1.5 p-6 text-center text-slate-300">
+                              <PhoneCall className="h-6 w-6 text-slate-400" />
+                              <p className="text-xs font-medium">No recent call logs recorded</p>
+                            </div>
+                          ) : (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left text-xs text-slate-200">
+                                <thead className="border-b border-white/10 bg-white/5 text-[10px] tracking-wider text-slate-300 uppercase">
+                                  <tr>
+                                    <th className="px-4 py-3">Call ID</th>
+                                    <th className="px-4 py-3">Time</th>
+                                    <th className="px-4 py-3">Topic</th>
+                                    <th className="px-4 py-3">Duration</th>
+                                    <th className="px-4 py-3">Outcome</th>
                                   </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
+                                </thead>
+                                <tbody className="divide-y divide-white/10">
+                                  {analytics.recent_logs.map((log) => {
+                                    const isDeclined =
+                                      log.outcome === 'FAILED' &&
+                                      log.failure_reason &&
+                                      /unanswered|declined|busy|canceled|pick/i.test(
+                                        log.failure_reason
+                                      );
+                                    return (
+                                      <tr
+                                        key={log.call_id}
+                                        className="transition-colors hover:bg-white/5"
+                                      >
+                                        <td className="px-4 py-3 font-mono font-bold text-[#74c69d]">
+                                          {log.call_id}
+                                        </td>
+                                        <td className="px-4 py-3 font-medium whitespace-nowrap text-slate-300">
+                                          {log.created_at
+                                            ? new Date(log.created_at).toLocaleTimeString([], {
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                              })
+                                            : 'Recently'}
+                                        </td>
+                                        <td className="max-w-[180px] truncate px-4 py-3 font-medium text-white">
+                                          {log.topic}
+                                        </td>
+                                        <td className="px-4 py-3 font-mono text-slate-300">
+                                          {log.duration_seconds}s
+                                        </td>
+                                        <td className="px-4 py-3">
+                                          {log.outcome === 'SUCCESS' ? (
+                                            <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/50 bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
+                                              <CheckCircle2 className="h-3 w-3" />
+                                              SUCCESS
+                                            </span>
+                                          ) : isDeclined ? (
+                                            <span
+                                              title={
+                                                log.failure_reason ||
+                                                'Call unanswered or declined by user'
+                                              }
+                                              className="inline-flex items-center gap-1 rounded-md border border-amber-500/50 bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-300"
+                                            >
+                                              <PhoneOff className="h-3 w-3" />
+                                              DECLINED
+                                            </span>
+                                          ) : (
+                                            <span
+                                              title={log.failure_reason || 'System Error'}
+                                              className="inline-flex items-center gap-1 rounded-md border border-rose-500/50 bg-rose-500/20 px-2 py-0.5 text-[10px] font-bold text-rose-300"
+                                            >
+                                              <PhoneOff className="h-3 w-3" />
+                                              FAILED
+                                            </span>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </div>
                     </div>
-                  </div>
+                  )}
+
+                  {/* Mandi API sub-tab */}
+                  {activeApiSubTab === 'mandi' && (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2">
+                        <ShoppingCart className="h-4 w-4 text-[#74c69d]" />
+                        <h3 className="text-sm font-bold text-white">Mandi Price API</h3>
+                        <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-300">
+                          Mock Data
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="flex flex-col items-center justify-center rounded-2xl border border-white/15 bg-white/5 p-5 text-center backdrop-blur-md">
+                          <TrendingUp className="mb-2 h-5 w-5 text-slate-400" />
+                          <p className="text-[10px] font-bold tracking-wider text-slate-300 uppercase">
+                            Total Requests
+                          </p>
+                          <p className="mt-1.5 text-3xl font-black text-white">
+                            {MOCK_API_STATS.mandi.total}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-center justify-center rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-5 text-center backdrop-blur-md">
+                          <CheckCircle2 className="mb-2 h-5 w-5 text-emerald-400" />
+                          <p className="text-[10px] font-bold tracking-wider text-emerald-300 uppercase">
+                            Successful
+                          </p>
+                          <p className="mt-1.5 text-3xl font-black text-emerald-400">
+                            {MOCK_API_STATS.mandi.successful}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-center justify-center rounded-2xl border border-rose-500/40 bg-rose-500/10 p-5 text-center backdrop-blur-md">
+                          <PhoneOff className="mb-2 h-5 w-5 text-rose-400" />
+                          <p className="text-[10px] font-bold tracking-wider text-rose-300 uppercase">
+                            Failed
+                          </p>
+                          <p className="mt-1.5 text-3xl font-black text-rose-400">
+                            {MOCK_API_STATS.mandi.failed}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Weather API sub-tab */}
+                  {activeApiSubTab === 'weather' && (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2">
+                        <Cloud className="h-4 w-4 text-[#74c69d]" />
+                        <h3 className="text-sm font-bold text-white">Weather API</h3>
+                        <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-300">
+                          Mock Data
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="flex flex-col items-center justify-center rounded-2xl border border-white/15 bg-white/5 p-5 text-center backdrop-blur-md">
+                          <TrendingUp className="mb-2 h-5 w-5 text-slate-400" />
+                          <p className="text-[10px] font-bold tracking-wider text-slate-300 uppercase">
+                            Total Requests
+                          </p>
+                          <p className="mt-1.5 text-3xl font-black text-white">
+                            {MOCK_API_STATS.weather.total}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-center justify-center rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-5 text-center backdrop-blur-md">
+                          <CheckCircle2 className="mb-2 h-5 w-5 text-emerald-400" />
+                          <p className="text-[10px] font-bold tracking-wider text-emerald-300 uppercase">
+                            Successful
+                          </p>
+                          <p className="mt-1.5 text-3xl font-black text-emerald-400">
+                            {MOCK_API_STATS.weather.successful}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-center justify-center rounded-2xl border border-rose-500/40 bg-rose-500/10 p-5 text-center backdrop-blur-md">
+                          <PhoneOff className="mb-2 h-5 w-5 text-rose-400" />
+                          <p className="text-[10px] font-bold tracking-wider text-rose-300 uppercase">
+                            Failed
+                          </p>
+                          <p className="mt-1.5 text-3xl font-black text-rose-400">
+                            {MOCK_API_STATS.weather.failed}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* TAB 2: SUPPORT TICKETS (Day 7 Core) */}
+              {/* TAB 2: SUPPORT TICKETS (unchanged) */}
               {activeTab === 'tickets' && (
                 <div className="space-y-4">
                   {isLoading && tickets.length === 0 ? (
@@ -523,9 +683,7 @@ export function TicketDashboard({ buttonStyle = 'icon-only' }: TicketDashboardPr
                                   #{t.ticket_id}
                                 </span>
                                 <span
-                                  className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold tracking-wider uppercase ${getUrgencyBadge(
-                                    t.urgency
-                                  )}`}
+                                  className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold tracking-wider uppercase ${getUrgencyBadge(t.urgency)}`}
                                 >
                                   {t.urgency}
                                 </span>
@@ -587,6 +745,75 @@ export function TicketDashboard({ buttonStyle = 'icon-only' }: TicketDashboardPr
                       })}
                     </AnimatePresence>
                   )}
+                </div>
+              )}
+
+              {/* TAB 3: AGENT RESPONSES */}
+              {activeTab === 'agent-responses' && (
+                <div className="space-y-5">
+                  <div className="flex items-center gap-2">
+                    <Bot className="h-4 w-4 text-[#74c69d]" />
+                    <h3 className="text-sm font-bold text-white">Agent Response Analytics</h3>
+                    <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-300">
+                      Mock Data
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    {MOCK_AGENT_STATS.map((agent) => (
+                      <div
+                        key={agent.name}
+                        className="space-y-3 rounded-2xl border border-[#52b788]/30 bg-[#0c2419]/60 p-5 backdrop-blur-md"
+                      >
+                        <div className="flex items-center gap-3 border-b border-white/10 pb-3">
+                          <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#52b788]/40 bg-[#52b788]/20 text-lg">
+                            {agent.icon}
+                          </span>
+                          <div>
+                            <p className="text-sm font-bold text-white">{agent.name}</p>
+                            <p className="text-[10px] text-slate-400">Voice AI Agent</p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="flex flex-col items-center justify-center rounded-xl border border-white/10 bg-white/5 px-2 py-3 text-center">
+                            <p className="text-[9px] font-bold tracking-wider text-slate-400 uppercase">
+                              Total
+                            </p>
+                            <p className="mt-1 text-xl font-black text-white">{agent.total}</p>
+                          </div>
+                          <div className="flex flex-col items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-2 py-3 text-center">
+                            <p className="text-[9px] font-bold tracking-wider text-emerald-400 uppercase">
+                              Success
+                            </p>
+                            <p className="mt-1 text-xl font-black text-emerald-400">
+                              {agent.successful}
+                            </p>
+                          </div>
+                          <div className="flex flex-col items-center justify-center rounded-xl border border-rose-500/30 bg-rose-500/10 px-2 py-3 text-center">
+                            <p className="text-[9px] font-bold tracking-wider text-rose-400 uppercase">
+                              Failed
+                            </p>
+                            <p className="mt-1 text-xl font-black text-rose-400">{agent.failed}</p>
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[10px]">
+                            <span className="text-slate-400">Success Rate</span>
+                            <span className="font-bold text-emerald-300">
+                              {Math.round((agent.successful / agent.total) * 100)}%
+                            </span>
+                          </div>
+                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all duration-700"
+                              style={{
+                                width: `${Math.round((agent.successful / agent.total) * 100)}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

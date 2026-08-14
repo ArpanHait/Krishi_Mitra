@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import re
@@ -16,6 +17,7 @@ from livekit.agents import (
     RunContext,
     cli,
     function_tool,
+    llm,
     room_io,
     tokenize,
 )
@@ -54,6 +56,21 @@ SYSTEM_PROMPT = """You are Krishi Mitra (🌾), an agricultural voice advisor sp
   * RESPOND TO THE USER IN THEIR INPUT LANGUAGE THAT CALL LOGS HAVE BEEN CLEARED WHILE THEIR PROFILE REMAINS SAFE.
 - WHEN USER ASKS TO FORGET PERSONAL DETAILS / PROFILE ("forget my details", "delete my name", "forget my profile"):
   * CALL THE `forget_farmer_facts` TOOL ONLY!
+
+### 1.2 MULTI-AGENT HANDOFF DIRECTIVE (CROP PROBLEM SPECIALIST / FASAL DOCTOR)
+- YOU HAVE A SPECIALIZED AGENT TEAMMATE CALLED "Fasal Doctor" (Crop Problem Specialist).
+- WHEN THE FARMER ASKS ABOUT:
+  * Plant pathology, crop diseases, yellow/brown spot leaves, insect pests, fungal infections, soil nutrient deficiency symptoms, or chemical/organic pesticide/fertilizer dosage remedies:
+  * YOU MUST VERBALLY ANNOUNCE THE HANDOFF IN THE FARMER'S LANGUAGE AND INVOKE THE `transfer_to_crop_specialist` TOOL IMMEDIATELY!
+  * Verbal transfer phrases:
+    - English: "Let me connect you with our Crop Problem Specialist, Fasal Doctor..."
+    - Devanagari Hindi: "Main aapko hamare Crop Problem Specialist se connect kar raha hoon..."
+    - Bengali: "Ami apnake amader Crop Specialist-er shathe connect korchi..."
+- WHEN TAKING CONTROL BACK FROM FASAL DOCTOR / UPON RE-ENTRY:
+  * YOU MUST START YOUR RESPONSE WITH A WARM SELF-REINTRODUCTION IN THE FARMER'S SPOKEN LANGUAGE:
+    - English: "Welcome back! I am Krishi Mitra."
+    - Devanagari Hindi: "वापसी पर स्वागत है! मैं कृषि मित्र हूँ।"
+    - Bengali: "ফিরে আসার জন্য স্বাগতম! আমি কৃষি মিত্র।"
 
 ### 2. IDENTITY & TONAL STYLE
 - Role: Helpful local agricultural expert speaking with a farmer over a phone call.
@@ -384,9 +401,39 @@ class CallContext:
 
 
 class Assistant(Agent):
-    def __init__(self, call_ctx: CallContext | None = None) -> None:
-        super().__init__(instructions=SYSTEM_PROMPT)
+    def __init__(
+        self,
+        call_ctx: CallContext | None = None,
+        chat_ctx: llm.ChatContext | None = None,
+    ) -> None:
+        super().__init__(instructions=SYSTEM_PROMPT, chat_ctx=chat_ctx)
         self.call_ctx = call_ctx or CallContext()
+
+    async def on_enter(self) -> None:
+        """Invoked when Krishi Mitra active agent starts or resumes control."""
+        logger.info("Active agent: KrishiMitra (Anisha Voice).")
+
+    @function_tool
+    async def transfer_to_crop_specialist(
+        self,
+        context: RunContext,
+        crop_issue_summary: str = "",
+    ) -> tuple[Agent, str]:
+        """Transfer the user to Fasal Doctor (Crop Problem Specialist) when the farmer asks about plant diseases, insect pests, yellow leaves, fungal issues, or crop health treatments.
+
+        Args:
+            crop_issue_summary: Summary of the crop disease or health issue described by the farmer.
+        """
+        from specialist import CropSpecialistAgent
+
+        specialist_agent = CropSpecialistAgent(
+            chat_ctx=self.chat_ctx.copy(exclude_instructions=True)
+        )
+        msg = "Connecting you to our Crop Problem Specialist, Fasal Doctor."
+        logger.info(
+            f"Handoff from KrishiMitra to FasalDoctor triggered. Summary: {crop_issue_summary}"
+        )
+        return specialist_agent, msg
 
     @function_tool
     async def lookup_caller(self, context: RunContext, user_id: str) -> str:

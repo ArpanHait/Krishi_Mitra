@@ -70,21 +70,33 @@ export function AgentChatTranscript({
                   </div>
                 </div>
               ) : (
-                /* Krishi Mitra Response Bubble Card (Left Aligned - Glassmorphism Gold Accent) */
-                <div className="group relative max-w-[90%] rounded-2xl rounded-tl-xs border border-[#e9c46a]/45 bg-gradient-to-br from-[#184e38]/45 via-[#123929]/50 to-[#0b261b]/50 px-5 py-4 shadow-2xl backdrop-blur-xl transition-all duration-200 hover:border-[#e9c46a]/70 sm:max-w-[82%]">
-                  <div className="mb-1.5 flex items-center gap-2 text-[11px] font-bold tracking-wide text-[#e9c46a]">
-                    <span className="flex size-5 items-center justify-center rounded-lg bg-gradient-to-br from-[#e9c46a] to-[#f4a261] text-xs text-[#261c14] shadow-sm">
-                      🌾
-                    </span>
-                    <span>Krishi Mitra (कृषि मित्र)</span>
-                  </div>
-                  <p className="text-sm leading-relaxed font-medium text-slate-100 sm:text-base">
-                    {message}
-                  </p>
-                  <div className="mt-1.5 text-right text-[10px] font-medium text-[#e9c46a]/70">
-                    {timeStr}
-                  </div>
-                </div>
+                /* Agent Response Bubble Card (Left Aligned - Glassmorphism Gold Accent) */
+                (() => {
+                  const isFasalDoctor =
+                    message.includes('Fasal Doctor') ||
+                    message.includes('फ़सल डॉक्टर') ||
+                    message.includes('ফসল ডাক্তার');
+                  return (
+                    <div className="group relative max-w-[90%] rounded-2xl rounded-tl-xs border border-[#e9c46a]/45 bg-gradient-to-br from-[#184e38]/45 via-[#123929]/50 to-[#0b261b]/50 px-5 py-4 shadow-2xl backdrop-blur-xl transition-all duration-200 hover:border-[#e9c46a]/70 sm:max-w-[82%]">
+                      <div className="mb-1.5 flex items-center gap-2 text-[11px] font-bold tracking-wide text-[#e9c46a]">
+                        <span className="flex size-5 items-center justify-center rounded-lg bg-gradient-to-br from-[#e9c46a] to-[#f4a261] text-xs text-[#261c14] shadow-sm">
+                          {isFasalDoctor ? '👨‍⚕️' : '🌾'}
+                        </span>
+                        <span>
+                          {isFasalDoctor
+                            ? 'Fasal Doctor (फ़सल डॉक्टर)'
+                            : 'Krishi Mitra (कृषि मित्र)'}
+                        </span>
+                      </div>
+                      <p className="text-sm leading-relaxed font-medium text-slate-100 sm:text-base">
+                        {message}
+                      </p>
+                      <div className="mt-1.5 text-right text-[10px] font-medium text-[#e9c46a]/70">
+                        {timeStr}
+                      </div>
+                    </div>
+                  );
+                })()
               )}
             </div>
           );

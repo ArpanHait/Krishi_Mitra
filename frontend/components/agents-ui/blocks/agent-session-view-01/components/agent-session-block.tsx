@@ -104,7 +104,7 @@ function StatePill({
           border: 'rgba(94,234,212,0.3)',
           dotColor: '#5eead4',
           dotAnim: 'animate-bounce',
-          text: 'Krishi Mitra is speaking...',
+          text: 'Agent is speaking... / जवाब दे रहे हैं',
         };
       case 'thinking':
         return {
