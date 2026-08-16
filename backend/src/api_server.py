@@ -1,4 +1,6 @@
 import asyncio
+import contextlib
+import datetime
 import json
 import logging
 import multiprocessing
@@ -9,6 +11,92 @@ from aiohttp import web
 import db
 
 logger = logging.getLogger("api_server")
+
+_sse_clients: set[asyncio.Queue] = set()
+_server_loop: asyncio.AbstractEventLoop | None = None
+
+
+async def broadcast_event(event_type: str, data: dict | None = None) -> None:
+    """Broadcast an SSE event to all connected frontend clients."""
+    payload = {
+        "event": event_type,
+        "data": data or {},
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }
+    dead_clients = set()
+    for queue in list(_sse_clients):
+        try:
+            queue.put_nowait(payload)
+        except Exception:
+            dead_clients.add(queue)
+    for q in dead_clients:
+        _sse_clients.discard(q)
+
+
+def broadcast_event_sync(event_type: str, data: dict | None = None) -> None:
+    """Thread-safe synchronous helper to broadcast SSE event from background threads/processes."""
+    global _server_loop
+    payload = {
+        "event": event_type,
+        "data": data or {},
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }
+    # Always push directly to active client queues if available
+    dead_clients = set()
+    for queue in list(_sse_clients):
+        try:
+            queue.put_nowait(payload)
+        except Exception:
+            dead_clients.add(queue)
+    for q in dead_clients:
+        _sse_clients.discard(q)
+
+    if _server_loop and _server_loop.is_running():
+        with contextlib.suppress(Exception):
+            _server_loop.call_soon_threadsafe(
+                lambda: asyncio.create_task(broadcast_event(event_type, data))
+            )
+
+
+async def handle_sse(request):
+    """SSE endpoint (GET /api/events) for real-time live events pushing to frontend dashboard."""
+    global _server_loop
+    with contextlib.suppress(Exception):
+        _server_loop = asyncio.get_running_loop()
+
+    response = web.StreamResponse(
+        status=200,
+        reason="OK",
+        headers={
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Bypass-Tunnel-Reminder, localtunnel-bypass-warning",
+        },
+    )
+    await response.prepare(request)
+    queue = asyncio.Queue()
+    _sse_clients.add(queue)
+    try:
+        # Send initial connected handshake
+        await response.write(b"event: connected\ndata: {}\n\n")
+        while True:
+            try:
+                payload = await asyncio.wait_for(queue.get(), timeout=15.0)
+                event_name = payload.get("event", "message")
+                event_data = json.dumps(payload.get("data", {}))
+                msg = f"event: {event_name}\ndata: {event_data}\n\n".encode()
+                await response.write(msg)
+            except asyncio.TimeoutError:
+                # Send periodic keep-alive ping to prevent proxy/Undici body timeouts
+                await response.write(b": ping\n\n")
+    except (asyncio.CancelledError, ConnectionResetError, Exception):
+        pass
+    finally:
+        _sse_clients.discard(queue)
+    return response
 
 
 def json_response(data, status=200):
@@ -68,6 +156,7 @@ async def handle_mark_read(request):
         if not ticket_id:
             return json_response({"error": "Missing ticket_id"}, status=400)
         success = db.mark_reply_read(ticket_id)
+        await broadcast_event("ticket_updated", {"ticket_id": ticket_id})
         return json_response({"success": success})
     except Exception as e:
         logger.error(f"Error in POST /api/escalations/mark-read: {e}")
@@ -82,6 +171,7 @@ async def handle_resolve(request):
             return json_response({"error": "Missing ticket_id"}, status=400)
         success = db.resolve_ticket(ticket_id)
         pruned = db.prune_old_resolved_tickets(limit=3)
+        await broadcast_event("ticket_updated", {"ticket_id": ticket_id})
         return json_response({"success": success, "pruned": pruned})
     except Exception as e:
         logger.error(f"Error in POST /api/escalations/resolve: {e}")
@@ -96,6 +186,7 @@ async def handle_update_status(request):
         if not ticket_id or not status_val:
             return json_response({"error": "Missing ticket_id or status"}, status=400)
         success = db.update_escalation_status(ticket_id, status_val)
+        await broadcast_event("ticket_updated", {"ticket_id": ticket_id, "status": status_val})
         return json_response({"success": success})
     except Exception as e:
         logger.error(f"Error in POST /api/escalations/update-status: {e}")
@@ -107,6 +198,7 @@ async def handle_sync_email(request):
         import email_listener
 
         await email_listener.check_support_replies()
+        await broadcast_event("ticket_updated", {})
         return json_response(
             {
                 "success": True,
@@ -145,6 +237,7 @@ async def handle_log_call(request):
             caller_id=caller_id,
             failure_reason=failure_reason,
         )
+        await broadcast_event("new_call_logged", {"call_id": call_id})
         return json_response({"success": True, "call_id": call_id})
     except Exception as e:
         logger.error(f"Error in POST /api/analytics/log-call: {e}")
@@ -175,6 +268,7 @@ async def handle_twilio_status(request):
                 outcome="SUCCESS",
                 caller_id=f"Phone {to_number}",
             )
+            await broadcast_event("new_call_logged", {"status": "SUCCESS"})
         elif call_status in ("no-answer", "busy", "canceled", "failed"):
             db.log_call_outcome(
                 call_type="SIP_OUTBOUND",
@@ -184,6 +278,7 @@ async def handle_twilio_status(request):
                 caller_id=f"Phone {to_number}",
                 failure_reason="Call unanswered or declined by recipient",
             )
+            await broadcast_event("new_call_logged", {"status": "FAILED"})
 
         return web.Response(text="<Response/>", content_type="text/xml")
     except Exception as e:
@@ -194,6 +289,7 @@ async def handle_twilio_status(request):
 def create_app():
     app = web.Application()
     app.router.add_options("/{tail:.*}", handle_options)
+    app.router.add_get("/api/events", handle_sse)
     app.router.add_get("/api/escalations", handle_get_escalations)
     app.router.add_get("/api/escalations/pending-count", handle_get_pending_count)
     app.router.add_post("/api/escalations/mark-read", handle_mark_read)
@@ -211,8 +307,10 @@ def start_api_server_thread(host: str = "0.0.0.0", port: int = 8080) -> None:
     """Starts the aiohttp REST API server in a background daemon thread."""
 
     def _run():
+        global _server_loop
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
+        _server_loop = loop
         app = create_app()
         runner = web.AppRunner(app)
         loop.run_until_complete(runner.setup())
@@ -236,8 +334,10 @@ def start_api_server_thread(host: str = "0.0.0.0", port: int = 8080) -> None:
 
 
 def _run_api_server_worker(host: str, port: int) -> None:
+    global _server_loop
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
+    _server_loop = loop
     app = create_app()
     runner = web.AppRunner(app)
     loop.run_until_complete(runner.setup())

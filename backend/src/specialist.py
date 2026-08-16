@@ -14,14 +14,16 @@ TONE & PERSONALITY:
 
 CRITICAL IDENTITY & HANDOFF RULES:
 1. STRICT LANGUAGE MATCHING DIRECTIVE (HIGHEST PRIORITY OVERRIDE):
-   - YOU MUST MATCH AND RESPOND IN THE EXACT SAME LANGUAGE AS THE USER'S LATEST INPUT!
-   - IF THE USER TYPES OR SPEAKS IN ENGLISH:
-     * YOU MUST RESPOND 100% IN PURE ENGLISH for BOTH "tts_text" AND "display_text"!
-     * ABSOLUTELY ZERO HINDI WORDS AND ZERO DEVANAGARI CHARACTERS WHEN THE USER SPEAKS OR TYPES IN ENGLISH!
-   - IF THE USER SPEAKS OR TYPES IN BENGALI:
-     * YOU MUST RESPOND 100% IN PURE BENGALI SCRIPT (বাংলা অক্ষর) for BOTH "tts_text" AND "display_text"!
-   - IF THE USER SPEAKS OR TYPES IN DEVANAGARI HINDI OR HINGLISH:
-     * YOU MUST RESPOND 100% IN PURE DEVANAGARI HINDI (देवनागरी हिंदी) for BOTH "tts_text" AND "display_text"!
+   - SCRIPT & LANGUAGE DETERMINATION (MANDATORY ON EVERY SINGLE TURN):
+     * IF USER INPUT IS IN ENGLISH / LATIN SCRIPT (a-z, A-Z, e.g. "My potato crop has brown spots", "Hello", "can you speak in english", "Yes"):
+       - YOU MUST RESPOND 100% IN PURE ENGLISH for BOTH "tts_text" AND "display_text"!
+       - ABSOLUTELY ZERO HINDI WORDS AND ZERO DEVANAGARI CHARACTERS WHEN THE USER SPEAKS OR WRITES IN ENGLISH!
+       - IGNORE ANY PRIOR NON-ENGLISH MESSAGES IN CONVERSATION HISTORY OR BACKGROUND NOISE FRAGMENTS — IF THE USER'S LATEST MESSAGE IS IN ENGLISH, YOUR ENTIRE RESPONSE MUST BE IN ENGLISH!
+     * IF USER INPUT IS IN BENGALI SCRIPT (বাংলা অক্ষর):
+       - YOU MUST RESPOND 100% IN PURE BENGALI SCRIPT (বাংলা অক্ষর) for BOTH "tts_text" AND "display_text"!
+       - ABSOLUTELY ZERO HINDI WORDS AND ZERO DEVANAGARI CHARACTERS!
+     * IF USER INPUT IS IN DEVANAGARI HINDI SCRIPT OR SPOKEN IN HINDI (देवनागरी हिंदी):
+       - YOU MUST RESPOND 100% IN PURE DEVANAGARI HINDI (देवनागरी हिंदी) for BOTH "tts_text" AND "display_text"!
 
 2. STRICT PRONUNCIATION & NO PARENTHESES RULE (PREVENT DOUBLE SPEECH):
    - ABSOLUTELY NEVER PUT ENGLISH TRANSLATIONS OR ENGLISH WORDS IN PARENTHESES AFTER NATIVE SCRIPT WORDS!
@@ -118,7 +120,23 @@ class CropSpecialistAgent(Agent):
         """
         from agent import Assistant
 
-        target_agent = Assistant(chat_ctx=self.chat_ctx.copy(exclude_instructions=True))
+        pruned_ctx = self.chat_ctx.copy(exclude_instructions=True)
+        msgs = (
+            pruned_ctx.messages()
+            if callable(getattr(pruned_ctx, "messages", None))
+            else getattr(pruned_ctx, "messages", [])
+        )
+        non_system = [
+            m for m in msgs if str(getattr(m, "role", "")).lower() != "system"
+        ]
+        if (
+            len(non_system) > 4
+            and hasattr(pruned_ctx, "messages")
+            and isinstance(pruned_ctx.messages, list)
+        ):
+            pruned_ctx.messages = non_system[-4:]
+
+        target_agent = Assistant(chat_ctx=pruned_ctx)
         msg = "Transferring you back to Krishi Mitra."
         logger.info(
             f"Handoff from FasalDoctor to KrishiMitra triggered. Reason: {reason}"

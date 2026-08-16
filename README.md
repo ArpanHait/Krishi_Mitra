@@ -61,27 +61,32 @@ flowchart LR
 ## 📅 Daily Feature Breakdown (Day 1 – Day 6)
 
 ### 🔹 Day 1: Core Voice AI Pipeline
+
 - Established initial voice agent pipeline connecting LiveKit RTC transport, Deepgram STT, Google Gemini LLM, and Murf Falcon TTS.
 - Implemented agricultural advisor identity for Krishi Mitra with base system prompts.
 
 ### 🔹 Day 2: Audio Polish, STT Tuning & Visualizer Enhancements
+
 - **Audio Clutter & Rumbling Resolution**: Integrated Murf `SentenceTokenizer` and streaming audio buffers, eliminating micro-chunk audio stutters.
 - **Silero VAD Tuning**: Fine-tuned voice activity detection (`min_silence_duration=1.2s`, `min_speech_duration=0.2s`) to accommodate natural pauses in Indian speech.
 - **Multilingual Keyterm Dictionary**: Added agricultural keyterms in English, Hindi, and Bengali to Deepgram Nova-3 for higher STT accuracy.
 - **UI Enhancements**: Added dynamic header slide animation (`cubic-bezier`) during active calls and tuned the voice visualizer (`50Hz–3400Hz`) to capture full vocal spectrums.
 
 ### 🔹 Day 3: Dual-Output JSON Streaming & Multilingual Precision
+
 - **Dual-Output Protocol**: Configured LLM to output a valid JSON object containing `tts_text` (synthesized audio) and `display_text` (screen transcript).
 - **Strict Language Matching**: Enforced strict language matching rules (English queries → 100% pure English text & audio, Hindi → Devanagari Hindi, Bengali → Bengali script).
 - **Off-Topic Guardrails**: Implemented dynamic refusal responses for non-agricultural queries.
 
 ### 🔹 Day 4: Persistent SQLite Memory & Consent Protocol
+
 - **SQLite Database (`krishi_memory.db`)**: Built profile storage tracking farmer names, crops grown, land size, district, topic, and language preferences.
 - **Instant Returning Greetings**: Pre-loaded profiles upon WebRTC connection so returning farmers are greeted instantly by name (*"Hello Arpan! Last time we spoke about your paddy..."*) with zero latency.
 - **Explicit Consent Protocol**: Krishi Mitra answers queries first, then explicitly asks permission before saving personal information.
 - **Forget Memory Tool**: Added `@function_tool forget_farmer_facts` allowing users to delete all stored profile data on demand.
 
 ### 🔹 Day 5: Dual Real-Time External Tools (Weather + Mandi Prices)
+
 - **Tool 1 (`get_district_weather`)**: Integrates Open-Meteo Geocoding & Forecast APIs to return current temperature, daily min/max range, and rainfall forecasts (mm) for any district.
 - **Tool 2 (`get_mandi_prices`)**: Fetches live commodity wholesale rates from Government Agmarknet / OGD India API (`data.gov.in`) with a **strict 3.0s timeout**.
 - **Local Benchmark Fallback (`mandi_rates.json`)**: Created local fallback dataset for key commodities (Paddy, Rice, Potato, Jute, Mustard, Wheat, Onion, Maize, Cotton) to ensure call stability if government APIs time out.
@@ -90,6 +95,7 @@ flowchart LR
 ### 🔹 Day 6: Outbound Phone Call Scheduling, Multilingual Memory & Smart Topic Gists
 
 #### 📞 Outbound Phone Call Scheduling (Twilio)
+
 - **`schedule_outbound_call` tool** ([`tools.py`](backend/src/tools.py)): Schedules an outbound Twilio phone call after a user-specified delay (e.g. *"call me in 30 seconds about Apple prices in Hooghly"*). Confirmed in chat as *"Got it! I have scheduled a call for you in ..."*
 - **`outbound_dialer.py`** ([`outbound_dialer.py`](backend/src/outbound_dialer.py)): Background async poller loop that checks SQLite for due calls and fires Twilio outbound calls with full live mandi price details pre-fetched and injected into the phone script.
 - **Exclusive Phone Delivery Protocol**: When a call is scheduled for a topic, Krishi Mitra **only confirms the schedule** in the web chat box — it never reveals market prices or answer details in chat. All information is delivered exclusively over the phone call.
@@ -97,11 +103,13 @@ flowchart LR
 - **4-Layer Credit Protection**: Atomic pre-locking, 60-second phone call cooldown, automatic call superseding, and one-shot `status = 'done'` marking.
 
 #### 🗣️ Live Mandi Prices Spoken Over Phone
+
 - Outbound calls **pre-fetch real-time mandi prices asynchronously** before dialling, then speak detailed wholesale rates (min/modal/max price, market name, district) fluently in clear English over the phone.
 - **Universal Commodity Support**: Removed the hardcoded 8-crop filter; any crop, fruit, vegetable, fertilizer, or chemical (Apple, Banana, Mango, Tomato, Urea, DAP, etc.) is now dynamically supported via `extract_commodity_from_topic()`.
 - **Expanded Benchmark Data** (`mandi_rates.json`): Added Apple, Banana, Mango, Tomato, Urea, and more for fallback coverage.
 
 #### 🌐 Turn-Level Dynamic Language Persistence
+
 - On **every spoken turn** (`user_speech_committed` event), Krishi Mitra auto-detects the spoken script:
   - **Bengali script (বাংলা)** → saves `language_preference = "bengali"` in SQLite.
   - **Devanagari script (हिंदी)** → saves `language_preference = "hindi"` in SQLite.
@@ -110,9 +118,11 @@ flowchart LR
 - **"Stop Service" Voice Command**: Saying *"Stop alert"*, *"Cancel calls"*, or *"Stop service"* clears all active call subscriptions from SQLite.
 
 #### 🧠 Automatic Commodity & Location Profile Persistence
+
 - `schedule_outbound_call` and `register_conditional_alert` **automatically save** the requested commodity/chemical/fertilizer into `crops_grown` and the district into SQLite `farmer_profiles` — no extra user action needed.
 
 #### 📝 Rich Topic Gist Memory
+
 - Added `extract_topic_gist()` ([`tools.py`](backend/src/tools.py)) to extract **descriptive, context-rich topic summaries** from every user utterance by stripping conversational filler (*"can you call me after thirty seconds and tell me"*, *"kya aap bata sakte hain"*, *"amake bolun"*):
   - *"Can you call me after thirty seconds and tell me the current market price of Apple in Hooghly?"* → stored as **`"the current market price of Apple in Hooghly"`**
   - *"Can you tell me about the best fertilizer for potato crops?"* → stored as **`"the best fertilizer for potato crops"`**
@@ -120,6 +130,7 @@ flowchart LR
 - **Name always preserved** in all greetings: *"Hello Ramesh! Last time we discussed the best fertilizer for potato crops. How is your field doing today?"*
 
 #### 🧪 Day 6 Tests & Code Quality
+
 - Added `tests/test_day6_telephony.py` and expanded `tests/test_memory.py` with:
   - `test_schedule_outbound_call_confirmations` — English, Hindi, and Bengali confirmation strings.
   - `test_universal_commodity_extraction` — any crop/fruit/fertilizer.
@@ -134,19 +145,23 @@ flowchart LR
 ### 🔹 Day 7: Government Support Escalation System & Email Synchronization
 
 #### 📋 Support Ticket Generation & Database Persistence
+
 - **`escalate_to_human_officer` Tool** ([`agent.py`](backend/src/agent.py)): Dynamically creates structured escalation tickets (`KM-XXXXXX`) in SQLite `escalations` table when queries require human agricultural officer intervention (e.g. severe pest outbreaks, subsidy disputes, emergency crop alerts).
 - **SQLite Escalation Table (`escalations`)**: Tracks `ticket_id`, `farmer_name`, `topic`, `summary`, `urgency` (`Low`, `Medium`, `High`, `Emergency`), `status` (`OPEN`, `RESOLVED`, `IN_PROGRESS`), `language`, `preferred_followup`, `officer_response`, `has_unread_reply`, `created_at`, and `updated_at`.
 
 #### 📧 Automated Government Email Dispatch
+
 - **`email_dispatcher.py`** ([`email_dispatcher.py`](backend/src/email_dispatcher.py)): Asynchronously dispatches formatted HTML emails containing Ticket ID, Farmer Name, Topic, Urgency, Summary, and Preferred Follow-up mode to regional agricultural officers via SMTP (`smtp.gmail.com`).
 - **Automatic Background Trigger**: Whenever `escalate_to_human_officer` is invoked by Krishi Mitra, email dispatch runs in a background thread without blocking the voice session.
 
 #### 📥 Reverse Officer Reply Synchronization (IMAP Listener)
+
 - **`email_listener.py`** ([`email_listener.py`](backend/src/email_listener.py)): Background IMAP listener service (`imap.gmail.com`) that periodically scans officer reply emails containing Ticket IDs (`KM-XXXXXX`).
 - **Reply Text Extraction**: Automatically strips quoted email threads (`On ... wrote:`) and extracts the officer's newly typed response.
 - **SQLite Update**: Updates `officer_response` text and sets `has_unread_reply = 1` in `escalations` table.
 
 #### 🔌 REST API Server Suite
+
 - **`api_server.py`** ([`api_server.py`](backend/src/api_server.py)): Standalone aiohttp REST API server running on port `8080` (co-located on process loop) serving frontend proxy routes:
   - `GET /api/escalations` — Returns all active support tickets.
   - `GET /api/escalations/pending-count` — Returns pending ticket counts & unread reply flags.
@@ -160,26 +175,31 @@ flowchart LR
 ### 🔹 Day 8: Call Outcome Analytics & Unified Control Center Dashboard
 
 #### 📊 Call Outcome Tracking & Metrics Engine
+
 - **SQLite Call Metrics Table (`call_logs`)**: Records detailed telephony metadata for outbound phone calls: `call_id` (`CALL-XXXXXX`), `caller_id`, `call_type` (`SIP_OUTBOUND`), `topic`, `duration_seconds`, `outcome` (`SUCCESS` or `FAILED`), `failure_reason`, and `created_at`.
 - **Analytics Aggregator (`db.get_call_analytics`)**: Computes live metrics: `total_calls`, `successful_calls`, `declined_calls`, `system_failed_calls`, `failed_calls`, `success_rate` %, and recent call history logs.
 
 #### ⚡ Event-Driven Twilio Status Webhook (`POST /api/twilio/status`)
+
 - **Real-Time Event Processing**: Attaches `status_callback` to Twilio outbound calls. Twilio posts real-time events to `/api/twilio/status`:
   - **Answered & Completed Call** → Twilio posts `CallStatus=completed` / `answered`, immediately logging **`SUCCESS`** 🟢 with exact call duration into SQLite.
   - **Declined or Unanswered Call** → Twilio posts `CallStatus=no-answer` / `busy` / `canceled`, immediately logging **`FAILED`** 🟡 (`DECLINED`) into SQLite.
 - **Mobile-Phone-Only Scope**: Web browser voice & text chat sessions are 100% excluded from analytics tracking — only real mobile phone calls via Twilio generate call records.
 
 #### 🗣️ Dedicated Voice Agent Tools
+
 - **`get_call_history_summary` Tool**: Enables Krishi Mitra to fetch live SQLite metrics and speak out exact call statistics (*"You have 3 total calls with a 100% success rate!"*) when asked by the farmer.
 - **`delete_call_history` Tool**: Wipes call history metrics to 0 on demand (`DELETE FROM call_logs`) while keeping personal farmer profiles (Name, Location, Crops) 100% safe.
 
 #### 🎛️ Unified Control Center Dashboard UI
+
 - **Tabbed Interface (`ticket-dashboard.tsx`)**: Replaces the single ticket modal with a unified 2-tab Control Center (`Call Analytics` & `Support Tickets`).
 - **5 Visual Metric Cards Grid**: Displays `Total Calls` (White), `Successful` (Emerald), `Declined` (Amber), `Failed` (Rose), and `Success Rate %` (Teal).
 - **Redesigned History Table**: Shows local time formatting (`02:54 PM`), topic summaries, call duration, and distinct status badges.
 - **Instant Refresh on Open**: Opens in under 5ms by pre-fetching SQLite stats directly when the modal triggers.
 
 #### 🎤 STT Endpointing Buffer Fix
+
 - **Deepgram STT Optimization**: Increased `endpointing_ms` from `500` to `800` ms in `agent.py`, allowing natural speech pauses without WebSocket disconnects (code 1006 / net0001).
 
 ---
@@ -187,10 +207,12 @@ flowchart LR
 ### 🔹 Day 9: Two-Way Seamless Multi-Agent Handoff System (Krishi Mitra & Fasal Doctor)
 
 #### 🧑‍⚕️ Crop Problem Specialist (`Fasal Doctor`)
+
 - **`CropSpecialistAgent` Class** ([`specialist.py`](backend/src/specialist.py)): Built standalone specialist agent persona dedicated to plant pathology, diagnosing crop pests, fungal infections, yellow leaves, soil nutrient deficiencies, and recommending chemical/organic remedies with safe dosages.
 - **Murf Falcon TTS (Samar Voice)**: Configured with **`en-IN-samar`** (Samar — Indian English male voice), creating a clear audio distinction from Krishi Mitra's female voice (`Anisha`).
 
 #### 🔄 Two-Way LiveKit Agent Handoff Architecture
+
 - **Path A: Krishi Mitra ➡️ Fasal Doctor (`transfer_to_crop_specialist`)**:
   - Automatically invoked when the farmer asks plant health / disease questions (*"My tomato leaves are turning yellow with brown spots"*).
   - Krishi Mitra verbally announces the transfer in the farmer's language (*"Main aapko hamare Crop Problem Specialist se connect kar raha hoon..."*).
@@ -201,6 +223,7 @@ flowchart LR
   - **Seamless Resume**: Krishi Mitra resumes in `Anisha` voice acknowledging context (*"Asha karta hoon ki hamare Crop Specialist ne aapki samasya suljha di hogi!..."*).
 
 #### 🧪 Day 9 Test Suite
+
 - Added `tests/test_day9_handoff.py` validating 5 handoff workflows:
   1. `test_general_query_stays_with_krishi_mitra`
   2. `test_crop_disease_triggers_specialist_handoff`
@@ -209,8 +232,7 @@ flowchart LR
   5. `test_specialist_responds_in_hindi_when_prompted_in_hindi`
 - **42 / 42 backend pytest cases passed (100%)**.
 
-
-### 🔹 Day 10: Sharing Voice Agent Journey
+### 🔹 Day 10: Sharing Voice Agent Journey:-
 
 Check out the post:
 
@@ -237,17 +259,23 @@ Check out the post:
 ## ⚙️ Prerequisites & Environment Setup
 
 ### Prerequisites
+
 - **Python 3.10+** with `uv` package manager:
+
   ```bash
   powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
   ```
+
 - **Node.js 18+** with `pnpm`:
+
   ```bash
   npm install -g pnpm
   ```
+
 - A **[LiveKit Cloud](https://cloud.livekit.io/)** account.
 
 ### Environment Variables
+
 Copy `.env.example` to `.env.local` in `backend/` and `frontend/`:
 
 ```env
@@ -305,7 +333,7 @@ pnpm install
 pnpm dev
 ```
 
-Open **http://localhost:3000** in your browser, click **Start talking**, and converse with Krishi Mitra!
+Open **<http://localhost:3000>** in your browser, click **Start talking**, and converse with Krishi Mitra!
 
 ---
 
@@ -357,8 +385,8 @@ uv run pytest                  # Run all 37 backend test cases (100% passing)
 uv run ruff check .            # Linting
 uv run ruff format .           # Code formatting
 ```
+## Forked from [Livekit-Starter](https://github.com/livekit/agents-python) Modified by [Arpan Hait](https://github.com/ArpanHait) 💖
 
----
 
 ## 📄 License
 

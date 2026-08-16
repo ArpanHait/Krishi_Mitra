@@ -45,7 +45,7 @@ function cloneSingleChild(
 
 export const AgentAudioVisualizerBarElementVariants = cva(
   [
-    'rounded-full transition-colors duration-250 ease-linear',
+    'rounded-full transition-all duration-150 ease-out will-change-[height,transform]',
     'bg-current/10 data-[lk-highlighted=true]:bg-current',
   ],
   {

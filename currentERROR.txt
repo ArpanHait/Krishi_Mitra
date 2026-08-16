@@ -1,0 +1,166 @@
+"remaining_audio": 0.0, "room": "voice_assistant_room_7203"}
+    20:27:25.973 INFO … livekit.…gins.murf [Murf TTS] Stream started - context_id=17a6424f938e, voice=Anisha, style=Conversation, locale=None, min_buffer_size=3, max_buffer_delay_in_ms=0,                        
+                                           endpoint=https://global.api.murf.ai                                                                                                                                     
+                                           {"room": "voice_assistant_room_7203"}
+    20:27:26.109 INFO … livekit.…gins.murf [Murf TTS] Murf TTFB (first sentence to first audio): 135.63 ms {"room": "voice_assistant_room_7203"}
+    20:27:33.371 DEBUG… livekit.agents     sent text to tts  
+                                         {"text": "There is an expected rainfall of 7.3 millimeters today. Please plan your field activities accordingly.", "remaining_audio": 4.509439706802368, "room": 
+"voice_assistant_room_7203"}
+    20:28:33.632 DEBUG… livekit.agents     executing tool  
+                                         {"function": "get_mandi_prices", "arguments": "{\"district\": \"Punjab\", \"commodity\": \"Chili\"}", "speech_id": "speech_1044eaa8f6ce", "room": 
+"voice_assistant_room_7203"}
+    20:28:35.521 WARNI… krishi_tools       Agmarknet Live API request failed/timed out: . Falling back to benchmark rates. {"room": "voice_assistant_room_7203"}
+    20:28:35.530 INFO … krishi_db          [Tool Analytics]: Logged mandi API call - Status: SUCCESS {"room": "voice_assistant_room_7203"}
+    20:28:35.541 DEBUG… livekit.agents     tools execution completed {"speech_id": "speech_1044eaa8f6ce", "room": "voice_assistant_room_7203"}
+    20:28:45.990 WARNI… livekit.agents     failed to generate LLM completion: message='gemini llm: server error', status_code=504, retryable=True, request_id=a599e54d4f86, body={  
+                                             "error": {                                                                                                                             
+                                               "code": 504,                                                                                                                         
+                                               "message": "Deadline expired before operation could complete.",                                                                      
+                                               "status": "DEADLINE_EXCEEDED"                                                                                                        
+                                             }                                                                                                                                      
+                                           }                                                                                                                                        
+                                            Gateway Timeout, retrying in 0.1s                                                                                                       
+                                         {"llm": "livekit.plugins.google.llm.LLM", "attempt": 1, "room": "voice_assistant_room_7203"}
+    20:28:56.322 WARNI… livekit.agents     failed to generate LLM completion: message='gemini llm: server error', status_code=504, retryable=True, request_id=41423a541e32, body={  
+                                             "error": {                                                                                                                             
+                                               "code": 504,                                                                                                                         
+                                               "message": "Deadline expired before operation could complete.",                                                                      
+                                               "status": "DEADLINE_EXCEEDED"                                                                                                        
+                                             }                                                                                                                                      
+                                           }                                                                                                                                        
+                                            Gateway Timeout, retrying in 2.0s                                                                                                       
+                                         {"llm": "livekit.plugins.google.llm.LLM", "attempt": 2, "room": "voice_assistant_room_7203"}
+    20:29:07.706 DEBUG… livekit.agents     sent text to tts  
+                                         {"text": "According to the recent market benchmark report for today, 16 August 2026, the modal price for chili in Punjab Mandi is 2,200 rupees per quintal, with a minimum
+of 2,000 and a maximum of 2,400 rupees.", "remaining_audio": 0.0, "room": "voice_assistant_room_7203"}
+    20:29:07.708 INFO … livekit.…gins.murf [Murf TTS] Stream started - context_id=b8b782b94f62, voice=Anisha, style=Conversation, locale=None, min_buffer_size=3, max_buffer_delay_in_ms=0,                        
+                                           endpoint=https://global.api.murf.ai                                                                                                                                     
+                                           {"room": "voice_assistant_room_7203"}
+    20:29:07.876 INFO … livekit.…gins.murf [Murf TTS] Murf TTFB (first sentence to first audio): 167.66 ms {"room": "voice_assistant_room_7203"}
+    20:29:19.525 DEBUG… livekit.agents     sent text to tts  
+                                         {"text": "Please note that rates can vary locally, so kindly verify them at your local market before finalizing any sale.", "remaining_audio": 4.483766078948975, "room": 
+"voice_assistant_room_7203"}
+    20:30:25.278 DEBUG… livekit.agents     received user transcript  
+                                         {"user_transcript": "Because I saw some bads are eating my cards.", "language": "en", "transcript_delay": 2.6047680377960205, "room": "voice_assistant_room_7203"}
+    20:30:28.278 DEBUG… livekit.…_detector eou prediction  
+                                           {"eou_probability": 0.0704808235168457, "duration": 2.813, "input": "<|im_start|>assistant\nhello arpan last time we discussed about current market price of potatoes 
+how is your field doing today and how can i assist you<|im_end|>\n<|im_start|>user\nwhat is the current temperature of tarakeswar<|im_end|>\n<|im_start|>assistant\nas per today's live weather report for         
+tarakeswar 16 aug 2026 the current temperature is 275°c min 263°c max 322°c there is an expected rainfall of 73 mm today please plan your field activities accordingly<|im_end|>\n<|im_start|>user\nwhat is the    
+exact mandi price of chili in panjab<|im_end|>\n<|im_start|>assistant\naccording to the recent market benchmark report for today 16 aug 2026 the modal price for chili in punjab mandi is ₹2200quintal min ₹2000   
+max ₹2400 please note that rates can vary locally so kindly verify them at your local market before finalizing any sale<|im_end|>\n<|im_start|>user\nbecause i saw some bads are eating my cards", "room":         
+"voice_assistant_room_7203"}
+    20:30:28.290 DEBUG… livekit.agents     using preemptive generation {"preemptive_lead_time": 3.001830577850342, "room": "voice_assistant_room_7203"}
+    20:30:35.761 WARNI… livekit.agents     failed to generate LLM completion: gemini llm: error generating content , retrying in 0.1s  
+                                         {"llm": "livekit.plugins.google.llm.LLM", "attempt": 1, "room": "voice_assistant_room_7203"}
+    20:30:40.957 DEBUG… livekit.agents     executing tool  
+                                         {"function": "transfer_to_crop_specialist", "arguments": "{\"crop_issue_summary\": \"Farmer reports birds or pests ('bads') eating their crops/plants.\"}", "speech_id": 
+"speech_b0e78c8305a2", "room": "voice_assistant_room_7203"}
+    20:30:40.989 INFO … agent              Handoff from KrishiMitra to FasalDoctor triggered. Summary: Farmer reports birds or pests ('bads') eating their crops/plants. {"room": "voice_assistant_room_7203"}
+    20:30:41.001 DEBUG… livekit.agents     tools execution completed {"speech_id": "speech_b0e78c8305a2", "room": "voice_assistant_room_7203"}
+    20:30:42.829 DEBUG… livekit.agents     sent text to tts {"text": "Let me connect you with our Crop Problem Specialist, Fasal Doctor...", "remaining_audio": 0.0, "room": "voice_assistant_room_7203"}
+    20:30:42.839 INFO … livekit.…gins.murf [Murf TTS] Stream started - context_id=abada2ba670f, voice=Anisha, style=Conversation, locale=None, min_buffer_size=3, max_buffer_delay_in_ms=0,                        
+                                           endpoint=https://global.api.murf.ai                                                                                                                                     
+                                           {"room": "voice_assistant_room_7203"}
+    20:30:42.969 INFO … livekit.…gins.murf [Murf TTS] Murf TTFB (first sentence to first audio): 129.16 ms {"room": "voice_assistant_room_7203"}
+    20:30:46.748 INFO … specialist         Switched active agent to CropSpecialistAgent (Fasal Doctor - Samar Voice). {"room": "voice_assistant_room_7203"}
+    20:30:47.671 DEBUG… livekit.….deepgram Established new Deepgram STT WebSocket connection:  
+                                           {"headers": {"dg-project-id": "b52e75f6-5c7e-40e2-b802-ef345f46ad5f", "dg-request-id": "01a00b16-f2bc-7ca0-889a-12f5ebfe92ea", "Date": "Sun, 16 Aug 2026 15:00:48 GMT"},
+"room": "voice_assistant_room_7203"}
+    20:30:49.714 DEBUG… livekit.agents     sent text to tts {"text": "Hello! I am Fasal Doctor, your Crop Problem Specialist.", "remaining_audio": 0.0, "room": "voice_assistant_room_7203"}
+    20:30:49.719 INFO … livekit.…gins.murf [Murf TTS] Stream started - context_id=648300661c21, voice=en-IN-samar, style=Conversation, locale=None, min_buffer_size=3, max_buffer_delay_in_ms=0,                   
+                                           endpoint=https://global.api.murf.ai                                                                                                                                     
+                                           {"room": "voice_assistant_room_7203"}
+    20:30:49.844 INFO … livekit.…gins.murf [Murf TTS] Murf TTFB (first sentence to first audio): 125.42 ms {"room": "voice_assistant_room_7203"}
+    20:30:50.303 DEBUG… livekit.agents     sent text to tts  
+                                         {"text": "It sounds like you are worried about pests eating your crops! I am here to help you get those plants back to health. Since you mentioned \"bads are eating my 
+cards,\" I assume you mean insects or pests are eating your crop leaves or plants. To help me give you the right prescription, could you please tell me: 1.", "remaining_audio": 0.332897424697876, "room":        
+"voice_assistant_room_7203"}
+    20:30:50.615 DEBUG… livekit.agents     flush audio emitter due to slow audio generation {"room": "voice_assistant_room_7203"}
+    20:31:07.173 DEBUG… livekit.agents     sent text to tts  
+                                         {"text": "Which crop is being affected? 2. Are you seeing any small insects, worms, or specific markings on the leaves? 3. Could you describe if they are eating the 
+leaves at night or during the day? Once I have these details, I can suggest the best treatment for you! Do you have any other questions about your crop's health?", "remaining_audio": 4.983175039291382, "room":  
+"voice_assistant_room_7203"}
+    20:32:10.137 DEBUG… livekit.agents     sent text to tts {"text": "Yellowing of carrot leaves can be caused by a few different issues.", "remaining_audio": 0.0, "room": "voice_assistant_room_7203"}
+    20:32:10.143 INFO … livekit.…gins.murf [Murf TTS] Stream started - context_id=40a7dccc2067, voice=en-IN-samar, style=Conversation, locale=None, min_buffer_size=3, max_buffer_delay_in_ms=0,                   
+                                           endpoint=https://global.api.murf.ai                                                                                                                                     
+                                           {"room": "voice_assistant_room_7203"}
+    20:32:10.270 INFO … livekit.…gins.murf [Murf TTS] Murf TTFB (first sentence to first audio): 127.32 ms {"room": "voice_assistant_room_7203"}
+    20:32:10.490 ERROR… livekit.agents     Error in _llm_inference_task {"room": "voice_assistant_room_7203"}
+Traceback (most recent call last):
+  File "C:\ALL CODE\murf-livekit-starter\backend\.venv\Lib\site-packages\aiohttp\streams.py", line 371, in _wait
+    await waiter
+asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\ALL CODE\murf-livekit-starter\backend\.venv\Lib\site-packages\livekit\plugins\google\llm.py", line 461, in _run
+    async for response in stream:
+  File "C:\ALL CODE\murf-livekit-starter\backend\.venv\Lib\site-packages\google\genai\models.py", line 7732, in base_async_generator
+    async for chunk in response:  # type: ignore[attr-defined]
+  File "C:\ALL CODE\murf-livekit-starter\backend\.venv\Lib\site-packages\google\genai\models.py", line 6428, in async_generator
+    async for response in response_stream:
+  File "C:\ALL CODE\murf-livekit-starter\backend\.venv\Lib\site-packages\google\genai\_api_client.py", line 1467, in async_generator
+    async for chunk in response:
+  File "C:\ALL CODE\murf-livekit-starter\backend\.venv\Lib\site-packages\google\genai\_api_client.py", line 264, in __anext__
+    return await self.segment_iterator.__anext__()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ALL CODE\murf-livekit-starter\backend\.venv\Lib\site-packages\google\genai\_api_client.py", line 302, in async_segments
+    async for chunk in self._aiter_response_stream():
+  File "C:\ALL CODE\murf-livekit-starter\backend\.venv\Lib\site-packages\google\genai\_api_client.py", line 413, in _aiter_response_stream
+    line_bytes = await self.response_stream.content.readline()
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ALL CODE\murf-livekit-starter\backend\.venv\Lib\site-packages\aiohttp\streams.py", line 376, in readline
+    return await self.readuntil()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ALL CODE\murf-livekit-starter\backend\.venv\Lib\site-packages\aiohttp\streams.py", line 410, in readuntil
+    await self._wait("readuntil")
+  File "C:\ALL CODE\murf-livekit-starter\backend\.venv\Lib\site-packages\aiohttp\streams.py", line 370, in _wait
+    with self._timer:
+  File "C:\ALL CODE\murf-livekit-starter\backend\.venv\Lib\site-packages\aiohttp\helpers.py", line 713, in __exit__
+    raise asyncio.TimeoutError from exc_val
+TimeoutError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\ALL CODE\murf-livekit-starter\backend\.venv\Lib\site-packages\livekit\agents\utils\log.py", line 17, in async_fn_logs
+    return await fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ALL CODE\murf-livekit-starter\backend\.venv\Lib\site-packages\opentelemetry\util\_decorator.py", line 71, in async_wrapper
+    return await func(*args, **kwargs)  # type: ignore
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ALL CODE\murf-livekit-starter\backend\.venv\Lib\site-packages\livekit\agents\voice\generation.py", line 138, in _llm_inference_task
+    async for chunk in llm_node:
+  File "C:\ALL CODE\murf-livekit-starter\backend\.venv\Lib\site-packages\livekit\agents\voice\agent.py", line 424, in llm_node
+    async for chunk in stream:
+  File "C:\ALL CODE\murf-livekit-starter\backend\.venv\Lib\site-packages\livekit\agents\llm\llm.py", line 372, in __anext__
+    raise exc  # noqa: B904
+    ^^^^^^^^^
+  File "C:\ALL CODE\murf-livekit-starter\backend\.venv\Lib\site-packages\livekit\agents\llm\llm.py", line 188, in _traceable_main_task
+    await self._main_task()
+  File "C:\ALL CODE\murf-livekit-starter\backend\.venv\Lib\site-packages\livekit\agents\llm\llm.py", line 213, in _main_task
+    return await self._run()
+           ^^^^^^^^^^^^^^^^^
+  File "C:\ALL CODE\murf-livekit-starter\backend\.venv\Lib\site-packages\livekit\plugins\google\llm.py", line 547, in _run
+    raise APIConnectionError(
+livekit.agents._exceptions.APIConnectionError: gemini llm: error generating content
+
+    20:32:10.925 DEBUG… livekit.agents     sent text to tts  
+                                         {"text": "To help me give you the right treatment, please tell me:  1. Are the leaves turning yellow from the bottom up, or are the tips yellowing first? 2. Do you see 
+any spots or web-like structures on the underside of the leaves? 3. How is the soil moisture? Is it very wet or very dry? Once I know this, I can tell you if it is a nutrient deficiency, a fungal issue, or      
+something else.", "remaining_audio": 3.0121917724609375, "room": "voice_assistant_room_7203"}
+    20:32:32.818 DEBUG… livekit.agents     sent text to tts {"text": "Do you have any other questions about your carrot", "remaining_audio": 4.519277811050415, "room": "voice_assistant_room_7203"}
+    20:32:59.601 DEBUG… livekit.agents     executing tool  
+                                         {"function": "transfer_to_krishi_mitra", "arguments": "{\"reason\": \"resolved\"}", "speech_id": "speech_0e6ea1562321", "room": "voice_assistant_room_7203"}
+    20:32:59.641 INFO … specialist         Handoff from FasalDoctor to KrishiMitra triggered. Reason: resolved {"room": "voice_assistant_room_7203"}
+    20:32:59.657 DEBUG… livekit.agents     tools execution completed {"speech_id": "speech_0e6ea1562321", "room": "voice_assistant_room_7203"}
+    20:33:09.911 WARNI… livekit.agents     failed to generate LLM completion: message='gemini llm: server error', status_code=504, retryable=True, request_id=842c42775779, body={  
+                                             "error": {                                                                                                                             
+                                               "code": 504,                                                                                                                         
+                                               "message": "Deadline expired before operation could complete.",                                                                      
+                                               "status": "DEADLINE_EXCEEDED"                                                                                                        
+                                             }                                                                                                                                      
+                                           }                                                                                                                                        
+                                            Gateway Timeout, retrying in 0.1s                                                                                                       
+                                         {"llm": "livekit.plugins.google.llm.LLM", "attempt": 1, "room": "voice_assistant_room_72

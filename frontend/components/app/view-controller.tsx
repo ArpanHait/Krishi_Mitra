@@ -141,7 +141,7 @@ export function ViewController({ appConfig }: ViewControllerProps) {
   return (
     <>
       <AppHeader hidden={isConnected} />
-      <AnimatePresence mode="wait">
+      <AnimatePresence>
         {/* ─── Microphone permission error ─── */}
         {hasMicError && (
           <MotionMicErrorCard key="mic-error" {...VIEW_MOTION_PROPS} onRetry={handleStartCall} />

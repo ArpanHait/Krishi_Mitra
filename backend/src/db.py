@@ -1,6 +1,7 @@
 import datetime
 import logging
 import sqlite3
+import time
 import uuid
 from pathlib import Path
 from typing import Any
@@ -11,8 +12,10 @@ DB_PATH = Path(__file__).parent.parent / "krishi_memory.db"
 
 
 def get_connection(db_path: Path | str = DB_PATH) -> sqlite3.Connection:
-    conn = sqlite3.connect(str(db_path))
+    conn = sqlite3.connect(str(db_path), timeout=10.0)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode = WAL;")
+    conn.execute("PRAGMA synchronous = NORMAL;")
     return conn
 
 
@@ -104,6 +107,28 @@ def init_db(db_path: Path | str = DB_PATH) -> None:
             )
             """
         )
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS api_tool_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tool_name TEXT NOT NULL,
+                status TEXT CHECK(status IN ('SUCCESS', 'FAILED')),
+                error_message TEXT DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS agent_response_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                agent_name TEXT NOT NULL,
+                status TEXT CHECK(status IN ('SUCCESS', 'FAILED')),
+                error_message TEXT DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
         cursor.execute("PRAGMA table_info(escalations)")
         escalation_cols = [row[1] for row in cursor.fetchall()]
         if "officer_response" not in escalation_cols:
@@ -152,10 +177,6 @@ def init_db(db_path: Path | str = DB_PATH) -> None:
             )
             cursor.execute("DROP TABLE escalations")
             cursor.execute("ALTER TABLE escalations_new RENAME TO escalations")
-            logger.info(
-                "Migrated escalations table schema to allow OFFICER_REPLIED status."
-            )
-
         conn.commit()
     _INITIALIZED_DBS.add(path_key)
     logger.info("Initialized krishi_memory.db tables successfully.")
@@ -763,6 +784,7 @@ def log_call_outcome(
     target_db = db_path or DB_PATH
     init_db(target_db)
     call_id = f"CALL-{uuid.uuid4().hex[:6].upper()}"
+    time.sleep(0.002)
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
     clean_type = "SIP_OUTBOUND" if "SIP" in str(call_type).upper() else "BROWSER"
     clean_outcome = "SUCCESS" if str(outcome).upper() == "SUCCESS" else "FAILED"
@@ -864,7 +886,159 @@ def get_call_analytics(db_path: Path | str | None = None) -> dict[str, Any]:
             "failed_calls": failed_calls,
             "success_rate": success_rate,
             "recent_logs": recent_logs,
+            "tool_stats": get_tool_analytics(target_db),
+            "agent_stats": get_agent_response_analytics(target_db),
         }
+
+
+def log_tool_call(
+    tool_name: str,
+    status: str = "SUCCESS",
+    error_message: str | None = None,
+    db_path: Path | str | None = None,
+) -> int:
+    """Log an API tool invocation outcome (mandi or weather). Returns inserted row id."""
+    target_db = db_path or DB_PATH
+    init_db(target_db)
+    clean_tool = "mandi" if "mandi" in str(tool_name).lower() else "weather"
+    clean_status = "SUCCESS" if str(status).upper() == "SUCCESS" else "FAILED"
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+    with get_connection(target_db) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO api_tool_logs (tool_name, status, error_message, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (clean_tool, clean_status, error_message, now),
+        )
+        row_id = cursor.lastrowid
+        conn.commit()
+    logger.info(
+        f"[Tool Analytics]: Logged {clean_tool} API call - Status: {clean_status}"
+    )
+    return row_id
+
+
+def get_tool_analytics(db_path: Path | str | None = None) -> dict[str, dict[str, int]]:
+    """Retrieve summary counts for API tools (mandi & weather) from SQLite database."""
+    target_db = db_path or DB_PATH
+    init_db(target_db)
+    with get_connection(target_db) as conn:
+        cursor = conn.cursor()
+        # Mandi
+        cursor.execute("SELECT COUNT(*) FROM api_tool_logs WHERE tool_name = 'mandi'")
+        mandi_total = cursor.fetchone()[0]
+        cursor.execute(
+            "SELECT COUNT(*) FROM api_tool_logs WHERE tool_name = 'mandi' AND status = 'SUCCESS'"
+        )
+        mandi_succ = cursor.fetchone()[0]
+        cursor.execute(
+            "SELECT COUNT(*) FROM api_tool_logs WHERE tool_name = 'mandi' AND status = 'FAILED'"
+        )
+        mandi_failed = cursor.fetchone()[0]
+
+        # Weather
+        cursor.execute("SELECT COUNT(*) FROM api_tool_logs WHERE tool_name = 'weather'")
+        weather_total = cursor.fetchone()[0]
+        cursor.execute(
+            "SELECT COUNT(*) FROM api_tool_logs WHERE tool_name = 'weather' AND status = 'SUCCESS'"
+        )
+        weather_succ = cursor.fetchone()[0]
+        cursor.execute(
+            "SELECT COUNT(*) FROM api_tool_logs WHERE tool_name = 'weather' AND status = 'FAILED'"
+        )
+        weather_failed = cursor.fetchone()[0]
+
+        return {
+            "mandi": {
+                "total": mandi_total,
+                "successful": mandi_succ,
+                "failed": mandi_failed,
+            },
+            "weather": {
+                "total": weather_total,
+                "successful": weather_succ,
+                "failed": weather_failed,
+            },
+        }
+
+
+def log_agent_response(
+    agent_name: str,
+    status: str = "SUCCESS",
+    error_message: str | None = None,
+    db_path: Path | str | None = None,
+) -> int:
+    """Log an agent speech turn / response outcome (Krishi Mitra or Fasal Doctor). Returns inserted row id."""
+    target_db = db_path or DB_PATH
+    init_db(target_db)
+    clean_name = (
+        "Fasal Doctor"
+        if "fasal" in str(agent_name).lower() or "doctor" in str(agent_name).lower()
+        else "Krishi Mitra"
+    )
+    clean_status = "SUCCESS" if str(status).upper() == "SUCCESS" else "FAILED"
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+    with get_connection(target_db) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO agent_response_logs (agent_name, status, error_message, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (clean_name, clean_status, error_message, now),
+        )
+        row_id = cursor.lastrowid
+        conn.commit()
+    logger.info(
+        f"[Agent Analytics]: Logged {clean_name} response - Status: {clean_status}"
+    )
+    return row_id
+
+
+def get_agent_response_analytics(
+    db_path: Path | str | None = None,
+) -> list[dict[str, Any]]:
+    """Retrieve summary counts and success rates for Krishi Mitra and Fasal Doctor."""
+    target_db = db_path or DB_PATH
+    init_db(target_db)
+    with get_connection(target_db) as conn:
+        cursor = conn.cursor()
+        agents_data = [
+            {"name": "Krishi Mitra", "icon": "🌾"},
+            {"name": "Fasal Doctor", "icon": "👨‍⚕️"},
+        ]
+        results = []
+        for ag in agents_data:
+            a_name = ag["name"]
+            cursor.execute(
+                "SELECT COUNT(*) FROM agent_response_logs WHERE agent_name = ?",
+                (a_name,),
+            )
+            total = cursor.fetchone()[0]
+            cursor.execute(
+                "SELECT COUNT(*) FROM agent_response_logs WHERE agent_name = ? AND status = 'SUCCESS'",
+                (a_name,),
+            )
+            successful = cursor.fetchone()[0]
+            cursor.execute(
+                "SELECT COUNT(*) FROM agent_response_logs WHERE agent_name = ? AND status = 'FAILED'",
+                (a_name,),
+            )
+            failed = cursor.fetchone()[0]
+            results.append(
+                {
+                    "name": a_name,
+                    "icon": ag["icon"],
+                    "total": total,
+                    "successful": successful,
+                    "failed": failed,
+                }
+            )
+        return results
 
 
 def clear_all_call_logs(db_path: Path | str | None = None) -> int:

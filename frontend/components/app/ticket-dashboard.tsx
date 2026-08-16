@@ -46,6 +46,20 @@ export interface CallLog {
   created_at: string;
 }
 
+export interface ApiToolStats {
+  total: number;
+  successful: number;
+  failed: number;
+}
+
+export interface AgentResponseStats {
+  name: string;
+  icon: string;
+  total: number;
+  successful: number;
+  failed: number;
+}
+
 export interface AnalyticsData {
   total_calls: number;
   successful_calls: number;
@@ -54,31 +68,9 @@ export interface AnalyticsData {
   failed_calls: number;
   success_rate: number;
   recent_logs: CallLog[];
+  tool_stats?: Record<'mandi' | 'weather', ApiToolStats>;
+  agent_stats?: AgentResponseStats[];
 }
-
-interface ApiToolStats {
-  total: number;
-  successful: number;
-  failed: number;
-}
-
-interface AgentResponseStats {
-  name: string;
-  icon: string;
-  total: number;
-  successful: number;
-  failed: number;
-}
-
-const MOCK_API_STATS: Record<'mandi' | 'weather', ApiToolStats> = {
-  mandi: { total: 24, successful: 22, failed: 2 },
-  weather: { total: 18, successful: 18, failed: 0 },
-};
-
-const MOCK_AGENT_STATS: AgentResponseStats[] = [
-  { name: 'Krishi Mitra', icon: '🌾', total: 52, successful: 49, failed: 3 },
-  { name: 'Fasal Doctor', icon: '👨‍⚕️', total: 22, successful: 20, failed: 2 },
-];
 
 interface TicketDashboardProps {
   buttonStyle?: 'icon-only' | 'header-button';
@@ -99,6 +91,14 @@ export function TicketDashboard({ buttonStyle = 'icon-only' }: TicketDashboardPr
     failed_calls: 0,
     success_rate: 0.0,
     recent_logs: [],
+    tool_stats: {
+      mandi: { total: 0, successful: 0, failed: 0 },
+      weather: { total: 0, successful: 0, failed: 0 },
+    },
+    agent_stats: [
+      { name: 'Krishi Mitra', icon: '🌾', total: 0, successful: 0, failed: 0 },
+      { name: 'Fasal Doctor', icon: '👨‍⚕️', total: 0, successful: 0, failed: 0 },
+    ],
   });
   const [pendingCount, setPendingCount] = useState<number>(0);
   const [hasUnreadReplies, setHasUnreadReplies] = useState<boolean>(false);
@@ -129,6 +129,21 @@ export function TicketDashboard({ buttonStyle = 'icon-only' }: TicketDashboardPr
     }
   }, []);
 
+  const fetchTickets = useCallback(async () => {
+    try {
+      const res = await fetch('/api/escalations');
+      if (res.ok) {
+        const data: Ticket[] = await res.json();
+        if (data) {
+          setTickets(data);
+          setHasUnreadReplies(data.some((t) => t.has_unread_reply === 1));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch tickets:', err);
+    }
+  }, []);
+
   const fetchAnalytics = useCallback(async () => {
     try {
       const res = await fetch('/api/analytics');
@@ -150,6 +165,39 @@ export function TicketDashboard({ buttonStyle = 'icon-only' }: TicketDashboardPr
     }
   }, []);
 
+  // Real-time Server-Sent Events (SSE) listener for 0ms automatic dashboard updates
+  useEffect(() => {
+    let eventSource: EventSource | null = null;
+    try {
+      eventSource = new EventSource('/api/events');
+
+      eventSource.addEventListener('new_call_logged', () => {
+        fetchAnalytics();
+      });
+
+      eventSource.addEventListener('tool_called', () => {
+        fetchAnalytics();
+      });
+
+      eventSource.addEventListener('agent_response', () => {
+        fetchAnalytics();
+      });
+
+      eventSource.addEventListener('ticket_updated', () => {
+        fetchTickets();
+        fetchPendingCount();
+      });
+    } catch (err) {
+      console.error('SSE initialization error:', err);
+    }
+
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
+  }, [fetchAnalytics, fetchTickets, fetchPendingCount]);
+
   const syncEmailsAndFetch = useCallback(
     async (isInitial = false) => {
       const now = Date.now();
@@ -166,18 +214,7 @@ export function TicketDashboard({ buttonStyle = 'icon-only' }: TicketDashboardPr
         setIsRefreshing(true);
 
         // 1. Fetch Call Analytics & Pending Count INSTANTLY from SQLite (5ms response)
-        await Promise.all([
-          fetchAnalytics(),
-          fetchPendingCount(),
-          fetch('/api/escalations')
-            .then((r) => r.ok && r.json())
-            .then((data: Ticket[]) => {
-              if (data) {
-                setTickets(data);
-                setHasUnreadReplies(data.some((t) => t.has_unread_reply === 1));
-              }
-            }),
-        ]);
+        await Promise.all([fetchAnalytics(), fetchPendingCount(), fetchTickets()]);
 
         // 2. Trigger IMAP email sync asynchronously in background without blocking UI
         fetch('/api/escalations/sync-email', { method: 'POST' }).catch((syncErr) =>
@@ -190,7 +227,7 @@ export function TicketDashboard({ buttonStyle = 'icon-only' }: TicketDashboardPr
         setIsRefreshing(false);
       }
     },
-    [fetchAnalytics, fetchPendingCount]
+    [fetchAnalytics, fetchPendingCount, fetchTickets]
   );
 
   useEffect(() => {
@@ -561,9 +598,6 @@ export function TicketDashboard({ buttonStyle = 'icon-only' }: TicketDashboardPr
                       <div className="flex items-center gap-2">
                         <ShoppingCart className="h-4 w-4 text-[#74c69d]" />
                         <h3 className="text-sm font-bold text-white">Mandi Price API</h3>
-                        <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-300">
-                          Mock Data
-                        </span>
                       </div>
                       <div className="grid grid-cols-3 gap-3">
                         <div className="flex flex-col items-center justify-center rounded-2xl border border-white/15 bg-white/5 p-5 text-center backdrop-blur-md">
@@ -572,7 +606,7 @@ export function TicketDashboard({ buttonStyle = 'icon-only' }: TicketDashboardPr
                             Total Requests
                           </p>
                           <p className="mt-1.5 text-3xl font-black text-white">
-                            {MOCK_API_STATS.mandi.total}
+                            {analytics.tool_stats?.mandi?.total ?? 0}
                           </p>
                         </div>
                         <div className="flex flex-col items-center justify-center rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-5 text-center backdrop-blur-md">
@@ -581,7 +615,7 @@ export function TicketDashboard({ buttonStyle = 'icon-only' }: TicketDashboardPr
                             Successful
                           </p>
                           <p className="mt-1.5 text-3xl font-black text-emerald-400">
-                            {MOCK_API_STATS.mandi.successful}
+                            {analytics.tool_stats?.mandi?.successful ?? 0}
                           </p>
                         </div>
                         <div className="flex flex-col items-center justify-center rounded-2xl border border-rose-500/40 bg-rose-500/10 p-5 text-center backdrop-blur-md">
@@ -590,7 +624,7 @@ export function TicketDashboard({ buttonStyle = 'icon-only' }: TicketDashboardPr
                             Failed
                           </p>
                           <p className="mt-1.5 text-3xl font-black text-rose-400">
-                            {MOCK_API_STATS.mandi.failed}
+                            {analytics.tool_stats?.mandi?.failed ?? 0}
                           </p>
                         </div>
                       </div>
@@ -603,9 +637,6 @@ export function TicketDashboard({ buttonStyle = 'icon-only' }: TicketDashboardPr
                       <div className="flex items-center gap-2">
                         <Cloud className="h-4 w-4 text-[#74c69d]" />
                         <h3 className="text-sm font-bold text-white">Weather API</h3>
-                        <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-300">
-                          Mock Data
-                        </span>
                       </div>
                       <div className="grid grid-cols-3 gap-3">
                         <div className="flex flex-col items-center justify-center rounded-2xl border border-white/15 bg-white/5 p-5 text-center backdrop-blur-md">
@@ -614,7 +645,7 @@ export function TicketDashboard({ buttonStyle = 'icon-only' }: TicketDashboardPr
                             Total Requests
                           </p>
                           <p className="mt-1.5 text-3xl font-black text-white">
-                            {MOCK_API_STATS.weather.total}
+                            {analytics.tool_stats?.weather?.total ?? 0}
                           </p>
                         </div>
                         <div className="flex flex-col items-center justify-center rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-5 text-center backdrop-blur-md">
@@ -623,7 +654,7 @@ export function TicketDashboard({ buttonStyle = 'icon-only' }: TicketDashboardPr
                             Successful
                           </p>
                           <p className="mt-1.5 text-3xl font-black text-emerald-400">
-                            {MOCK_API_STATS.weather.successful}
+                            {analytics.tool_stats?.weather?.successful ?? 0}
                           </p>
                         </div>
                         <div className="flex flex-col items-center justify-center rounded-2xl border border-rose-500/40 bg-rose-500/10 p-5 text-center backdrop-blur-md">
@@ -632,7 +663,7 @@ export function TicketDashboard({ buttonStyle = 'icon-only' }: TicketDashboardPr
                             Failed
                           </p>
                           <p className="mt-1.5 text-3xl font-black text-rose-400">
-                            {MOCK_API_STATS.weather.failed}
+                            {analytics.tool_stats?.weather?.failed ?? 0}
                           </p>
                         </div>
                       </div>
@@ -754,65 +785,66 @@ export function TicketDashboard({ buttonStyle = 'icon-only' }: TicketDashboardPr
                   <div className="flex items-center gap-2">
                     <Bot className="h-4 w-4 text-[#74c69d]" />
                     <h3 className="text-sm font-bold text-white">Agent Response Analytics</h3>
-                    <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-300">
-                      Mock Data
-                    </span>
                   </div>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    {MOCK_AGENT_STATS.map((agent) => (
-                      <div
-                        key={agent.name}
-                        className="space-y-3 rounded-2xl border border-[#52b788]/30 bg-[#0c2419]/60 p-5 backdrop-blur-md"
-                      >
-                        <div className="flex items-center gap-3 border-b border-white/10 pb-3">
-                          <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#52b788]/40 bg-[#52b788]/20 text-lg">
-                            {agent.icon}
-                          </span>
-                          <div>
-                            <p className="text-sm font-bold text-white">{agent.name}</p>
-                            <p className="text-[10px] text-slate-400">Voice AI Agent</p>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2">
-                          <div className="flex flex-col items-center justify-center rounded-xl border border-white/10 bg-white/5 px-2 py-3 text-center">
-                            <p className="text-[9px] font-bold tracking-wider text-slate-400 uppercase">
-                              Total
-                            </p>
-                            <p className="mt-1 text-xl font-black text-white">{agent.total}</p>
-                          </div>
-                          <div className="flex flex-col items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-2 py-3 text-center">
-                            <p className="text-[9px] font-bold tracking-wider text-emerald-400 uppercase">
-                              Success
-                            </p>
-                            <p className="mt-1 text-xl font-black text-emerald-400">
-                              {agent.successful}
-                            </p>
-                          </div>
-                          <div className="flex flex-col items-center justify-center rounded-xl border border-rose-500/30 bg-rose-500/10 px-2 py-3 text-center">
-                            <p className="text-[9px] font-bold tracking-wider text-rose-400 uppercase">
-                              Failed
-                            </p>
-                            <p className="mt-1 text-xl font-black text-rose-400">{agent.failed}</p>
-                          </div>
-                        </div>
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-[10px]">
-                            <span className="text-slate-400">Success Rate</span>
-                            <span className="font-bold text-emerald-300">
-                              {Math.round((agent.successful / agent.total) * 100)}%
+                    {(analytics.agent_stats || []).map((agent) => {
+                      const rate =
+                        agent.total > 0 ? Math.round((agent.successful / agent.total) * 100) : 0;
+                      return (
+                        <div
+                          key={agent.name}
+                          className="space-y-3 rounded-2xl border border-[#52b788]/30 bg-[#0c2419]/60 p-5 backdrop-blur-md"
+                        >
+                          <div className="flex items-center gap-3 border-b border-white/10 pb-3">
+                            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#52b788]/40 bg-[#52b788]/20 text-lg">
+                              {agent.icon}
                             </span>
+                            <div>
+                              <p className="text-sm font-bold text-white">{agent.name}</p>
+                              <p className="text-[10px] text-slate-400">Voice AI Agent</p>
+                            </div>
                           </div>
-                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-                            <div
-                              className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all duration-700"
-                              style={{
-                                width: `${Math.round((agent.successful / agent.total) * 100)}%`,
-                              }}
-                            />
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="flex flex-col items-center justify-center rounded-xl border border-white/10 bg-white/5 px-2 py-3 text-center">
+                              <p className="text-[9px] font-bold tracking-wider text-slate-400 uppercase">
+                                Total
+                              </p>
+                              <p className="mt-1 text-xl font-black text-white">{agent.total}</p>
+                            </div>
+                            <div className="flex flex-col items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-2 py-3 text-center">
+                              <p className="text-[9px] font-bold tracking-wider text-emerald-400 uppercase">
+                                Success
+                              </p>
+                              <p className="mt-1 text-xl font-black text-emerald-400">
+                                {agent.successful}
+                              </p>
+                            </div>
+                            <div className="flex flex-col items-center justify-center rounded-xl border border-rose-500/30 bg-rose-500/10 px-2 py-3 text-center">
+                              <p className="text-[9px] font-bold tracking-wider text-rose-400 uppercase">
+                                Failed
+                              </p>
+                              <p className="mt-1 text-xl font-black text-rose-400">
+                                {agent.failed}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-[10px]">
+                              <span className="text-slate-400">Success Rate</span>
+                              <span className="font-bold text-emerald-300">{rate}%</span>
+                            </div>
+                            <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                              <div
+                                className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all duration-700"
+                                style={{
+                                  width: `${rate}%`,
+                                }}
+                              />
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}

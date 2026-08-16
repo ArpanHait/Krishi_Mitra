@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import re
@@ -35,15 +36,16 @@ load_dotenv(".env.local")
 SYSTEM_PROMPT = """You are Krishi Mitra (🌾), an agricultural voice advisor speaking with a farmer.
 
 ### 1. STRICT LANGUAGE MATCHING DIRECTIVE (HIGHEST PRIORITY OVERRIDE)
-- YOU MUST MATCH AND RESPOND IN THE EXACT SAME LANGUAGE AS THE USER'S LATEST INPUT!
-- IF THE USER TYPES OR SPEAKS IN ENGLISH (e.g., "What fertilizer should I use?", "Hello", "Do you know my name?", "Delete all call data"):
-  * YOU MUST RESPOND 100% IN PURE ENGLISH for BOTH "tts_text" AND "display_text"!
-  * ABSOLUTELY ZERO HINDI WORDS AND ZERO DEVANAGARI CHARACTERS WHEN THE USER SPEAKS OR TYPES IN ENGLISH!
-- IF THE USER SPEAKS OR TYPES IN BENGALI:
-  * YOU MUST RESPOND 100% IN PURE BENGALI SCRIPT (বাংলা অক্ষর) for BOTH "tts_text" AND "display_text"!
-  * ABSOLUTELY ZERO HINDI WORDS AND ZERO DEVANAGARI CHARACTERS WHEN THE USER SPEAKS IN BENGALI!
-- IF THE USER SPEAKS OR TYPES IN DEVANAGARI HINDI OR HINGLISH:
-  * YOU MUST RESPOND 100% IN PURE DEVANAGARI HINDI (देवनागरी हिंदी) for BOTH "tts_text" AND "display_text"!
+- SCRIPT & LANGUAGE DETERMINATION (MANDATORY ON EVERY SINGLE TURN):
+  * IF USER INPUT IS IN ENGLISH / LATIN SCRIPT (a-z, A-Z, e.g. "From Kolkata West Bengal.", "What is the potato price in Hooghly?", "Hello", "can you speak in english", "Yes", "No"):
+    - YOU MUST RESPOND 100% IN PURE ENGLISH for BOTH "tts_text" AND "display_text"!
+    - ABSOLUTELY ZERO HINDI WORDS AND ZERO DEVANAGARI CHARACTERS WHEN THE USER SPEAKS OR WRITES IN ENGLISH!
+    - IGNORE ANY PRIOR NON-ENGLISH MESSAGES IN CONVERSATION HISTORY OR BACKGROUND NOISE FRAGMENTS — IF THE USER'S LATEST MESSAGE IS IN ENGLISH, YOUR ENTIRE RESPONSE MUST BE IN ENGLISH!
+  * IF USER INPUT IS IN BENGALI SCRIPT (বাংলা অক্ষর, e.g. "আলুর দাম কত?", "নমস্কার", "হুগলি"):
+    - YOU MUST RESPOND 100% IN PURE BENGALI SCRIPT (বাংলা অক্ষর) for BOTH "tts_text" AND "display_text"!
+    - ABSOLUTELY ZERO HINDI WORDS AND ZERO DEVANAGARI CHARACTERS!
+  * IF USER INPUT IS IN DEVANAGARI HINDI SCRIPT OR SPOKEN IN HINDI (देवनागरी हिंदी, e.g. "नमस्ते", "मौसम कैसा रहेगा?", "आलू का भाव"):
+    - YOU MUST RESPOND 100% IN PURE DEVANAGARI HINDI (देवनागरी हिंदी) for BOTH "tts_text" AND "display_text"!
 - NO DUAL-SCRIPT / PARENTHETICAL ENGLISH DUPLICATES (PRONUNCIATION FIX):
   * ABSOLUTELY NEVER write English transliterated names or English words in parentheses after native script words (e.g. NEVER write 'अर्ली ब्लाइट' (Early Blight) or 'मन्कोज़ेब' (Mancozeb 75% WP) or 'घेरे' (rings))!
   * Write ONLY the native script term itself (e.g. 'अर्ली ब्लाइट या लेट ब्लाइट', 'घेरे', 'मैनकोज़ेब') without any duplicate English parenthetical translations, so TTS reads each word smoothly once without repeating terms twice!
@@ -192,17 +194,22 @@ JSON Structure:
   "display_text": "<Text for screen display>"
 }
 
-### 13. FEW-SHOT EXAMPLES (Follow these patterns)
+### 13. SUPPORT TICKET CREATION & ESCALATION FLOW
+- When the farmer asks to create a support ticket or escalate an issue via `create_escalation`:
+  * Instantly reassure the farmer in their spoken language that their support ticket is being created right away.
+  * Provide the generated Ticket ID clearly in your response so they can track it.
+
+### 14. FEW-SHOT EXAMPLES (Follow these patterns)
 
 EXAMPLE 1 — English weather & mandi query:
-User: "What is the mandi price of paddy in Burdwan today?"
+User: "What is the mandi price of paddy in Kolkata today?"
 Response:
-{"tts_text": "As per today's live Agmarknet report for paddy in Burdwan Mandi, the modal price is 2,180 rupees per quintal, with a minimum of 2,050 rupees and a maximum of 2,250 rupees. Please verify rates at your local market before finalizing any sale.", "display_text": "As per today's live Agmarknet report for paddy in Burdwan Mandi, the modal price is ₹2,180/quintal (Min: ₹2,050, Max: ₹2,250). Please verify rates at your local market before finalizing any sale."}
+{"tts_text": "As per today's live Agmarknet report for paddy in Kolkata Mandi, the modal price is 2,180 rupees per quintal, with a minimum of 2,050 rupees and a maximum of 2,250 rupees. Please verify rates at your local market before finalizing any sale.", "display_text": "As per today's live Agmarknet report for paddy in Kolkata Mandi, the modal price is ₹2,180/quintal (Min: ₹2,050, Max: ₹2,250). Please verify rates at your local market before finalizing any sale."}
 
 EXAMPLE 2 — Hindi weather query:
-User: "Kya aaj Burdwan mein baarish hogi?"
+User: "क्या आज हुगली में बारिश होगी?"
 Response:
-{"tts_text": "आज बर्धमान में लाइव मौसम रिपोर्ट के अनुसार तापमान 32 डिग्री सेल्सियस रहेगा और आज लगभग 5 मिलीमीटर बारिश होने की संभावना है। छिड़काव या कटाई का काम बारिश को ध्यान में रखकर करें।", "display_text": "आज बर्धमान में लाइव मौसम रिपोर्ट के अनुसार तापमान 32°C रहेगा और आज लगभग 5 mm बारिश होने की संभावना है। छिड़काव या कटाई का काम बारिश को ध्यान में रखकर करें।"}
+{"tts_text": "आज हुगली में लाइव मौसम रिपोर्ट के अनुसार तापमान 32 डिग्री सेल्सियस रहेगा और आज लगभग 5 मिलीमीटर बारिश होने की संभावना है। छिड़काव या कटाई का काम बारिश को ध्यान में रखकर करें।", "display_text": "आज हुगली में लाइव मौसम रिपोर्ट के अनुसार तापमान 32°C रहेगा और आज लगभग 5 mm बारिश होने की संभावना है। छिड़काव या cutाई का काम बारिश को ध्यान में रखकर करें।"}
 
 EXAMPLE 3 — Bengali farming query:
 User: "আমার পাট গাছের পাতা হলুদ হয়ে যাচ্ছে"
@@ -449,9 +456,23 @@ class Assistant(Agent):
         """
         from specialist import CropSpecialistAgent
 
-        specialist_agent = CropSpecialistAgent(
-            chat_ctx=self.chat_ctx.copy(exclude_instructions=True)
+        pruned_ctx = self.chat_ctx.copy(exclude_instructions=True)
+        msgs = (
+            pruned_ctx.messages()
+            if callable(getattr(pruned_ctx, "messages", None))
+            else getattr(pruned_ctx, "messages", [])
         )
+        non_system = [
+            m for m in msgs if str(getattr(m, "role", "")).lower() != "system"
+        ]
+        if (
+            len(non_system) > 4
+            and hasattr(pruned_ctx, "messages")
+            and isinstance(pruned_ctx.messages, list)
+        ):
+            pruned_ctx.messages = non_system[-4:]
+
+        specialist_agent = CropSpecialistAgent(chat_ctx=pruned_ctx)
         msg = "Connecting you to our Crop Problem Specialist, Fasal Doctor."
         logger.info(
             f"Handoff from KrishiMitra to FasalDoctor triggered. Summary: {crop_issue_summary}"
@@ -504,8 +525,8 @@ class Assistant(Agent):
             "last_topic": last_topic,
         }
         self.call_ctx.objective_fulfilled = True
-        saved_profile = db.upsert_farmer_profile(
-            user_id, name=name, facts=facts, consent=True
+        saved_profile = await asyncio.to_thread(
+            db.upsert_farmer_profile, user_id, name=name, facts=facts, consent=True
         )
         return json.dumps(
             {"success": True, "saved_profile": saved_profile}, ensure_ascii=False
@@ -523,7 +544,7 @@ class Assistant(Agent):
         Args:
             user_id: Caller ID / room ID of the farmer.
         """
-        db.delete_farmer_profile(user_id)
+        await asyncio.to_thread(db.delete_farmer_profile, user_id)
         return json.dumps(
             {"success": True, "message": "All stored personal profile facts deleted."},
             ensure_ascii=False,
@@ -584,7 +605,7 @@ class Assistant(Agent):
         self,
         context: RunContext,
         commodity: str,
-        district: str = "Burdwan",
+        district: str = "",
         state: str = "West Bengal",
     ) -> str:
         """TOOL 2: get_mandi_prices
@@ -592,11 +613,11 @@ class Assistant(Agent):
 
         Args:
             commodity: Commodity / crop name (e.g. 'Paddy', 'Rice', 'Potato', 'Jute', 'Mustard', 'Wheat').
-            district: District name (default 'Burdwan').
+            district: District / city / region requested by user (e.g. 'Kolkata', 'Hooghly', 'Burdwan', 'Bankura', 'Punjab').
             state: State name (default 'West Bengal').
         """
         self.call_ctx.objective_fulfilled = True
-        self.call_ctx.topic = f"Mandi prices: {commodity} in {district}"
+        self.call_ctx.topic = f"Mandi prices: {commodity} in {district or 'Local'}"
         return await tools.fetch_mandi_prices(
             commodity=commodity, district=district, state=state
         )
@@ -608,7 +629,7 @@ class Assistant(Agent):
         delay_or_time_str: str,
         topic: str,
         phone_number: str | None = None,
-        district: str = "Burdwan",
+        district: str = "",
         language: str = "hindi",
     ) -> str:
         """TOOL 3: schedule_outbound_call
@@ -902,7 +923,7 @@ async def my_agent(ctx: JobContext):
         ),
         turn_detection=MultilingualModel(),
         vad=ctx.proc.userdata["vad"],
-        preemptive_generation=True,
+        preemptive_generation=False,
     )
 
     call_ctx = CallContext()
@@ -928,6 +949,21 @@ async def my_agent(ctx: JobContext):
 
     async def _on_shutdown():
         logger.info("Gracefully closing session room context.")
+        duration = max(1, int(time.time() - call_ctx.start_time))
+        outcome = "SUCCESS" if call_ctx.objective_fulfilled or duration >= 3 else "FAILED"
+        db.log_call_outcome(
+            call_type=call_ctx.call_type,
+            topic=call_ctx.topic,
+            duration_seconds=duration,
+            outcome=outcome,
+            caller_id=call_ctx.caller_id,
+        )
+        try:
+            import api_server
+
+            api_server.broadcast_event_sync("new_call_logged", {})
+        except Exception:
+            pass
 
     ctx.add_shutdown_callback(_on_shutdown)
 
@@ -936,7 +972,7 @@ async def my_agent(ctx: JobContext):
     if ctx.room and ctx.room.name:
         user_id = ctx.room.name
 
-    # Automatic turn-level language & topic detector & persistence
+    # Automatic turn-level language & topic detector & non-blocking background persistence
     @session.on("user_speech_committed")
     def _on_user_speech(ev):
         user_text = ""
@@ -948,24 +984,88 @@ async def my_agent(ctx: JobContext):
             user_text = str(ev)
 
         if user_text and len(user_text.strip()) >= 3:
-            # 1. Update language preference
-            if re.search(r"[\u0980-\u09FF]", user_text):
-                db.update_language_preference(user_id, "bengali")
-            elif re.search(r"[\u0900-\u097F]", user_text):
-                db.update_language_preference(user_id, "hindi")
-            elif re.search(r"[a-zA-Z]", user_text):
-                db.update_language_preference(user_id, "english")
+            # 1. Update language preference in background thread with noise filter
+            if re.search(r"[a-zA-Z]", user_text):
+                _t = asyncio.create_task(
+                    asyncio.to_thread(db.update_language_preference, user_id, "english")
+                )
+                _ = _t
+            elif re.search(r"[\u0980-\u09FF]", user_text) and len(re.findall(r"[\u0980-\u09FF]", user_text)) >= 3:
+                _t = asyncio.create_task(
+                    asyncio.to_thread(db.update_language_preference, user_id, "bengali")
+                )
+                _ = _t
+            elif re.search(r"[\u0900-\u097F]", user_text) and len(re.findall(r"[\u0900-\u097F]", user_text)) >= 3:
+                _t = asyncio.create_task(
+                    asyncio.to_thread(db.update_language_preference, user_id, "hindi")
+                )
+                _ = _t
 
-            # 2. Extract and auto-save turn-level rich topic gist and commodity
+            # 2. Extract and auto-save turn-level rich topic gist and commodity non-blockingly
             target_commodity = tools.extract_commodity_from_topic(user_text)
             topic_gist = tools.extract_topic_gist(user_text)
-            existing_prof = db.get_farmer_profile(user_id) or {}
-            existing_facts = dict(existing_prof)
-            if target_commodity:
-                existing_facts["crops_grown"] = target_commodity
-            if topic_gist:
-                existing_facts["last_topic"] = topic_gist
-            db.upsert_farmer_profile(user_id=user_id, facts=existing_facts)
+
+            def _bg_sync(t_comm: str, t_gist: str):
+                try:
+                    existing_prof = db.get_farmer_profile(user_id) or {}
+                    existing_facts = dict(existing_prof)
+                    if t_comm:
+                        existing_facts["crops_grown"] = t_comm
+                    if t_gist:
+                        existing_facts["last_topic"] = t_gist
+                    db.upsert_farmer_profile(user_id=user_id, facts=existing_facts)
+                except Exception as e:
+                    logger.warning(f"Background profile sync error: {e}")
+
+            _task = asyncio.create_task(
+                asyncio.to_thread(_bg_sync, target_commodity, topic_gist)
+            )
+            _ = _task
+
+        # Prune chat context window so Gemini 3.1 Flash Lite stays ultra-fast (<1s response)
+        active_ag = getattr(session, "agent", None)
+        if active_ag and hasattr(active_ag, "chat_ctx"):
+            c_ctx = active_ag.chat_ctx
+            msgs = (
+                c_ctx.messages()
+                if callable(getattr(c_ctx, "messages", None))
+                else getattr(c_ctx, "messages", [])
+            )
+            sys_m = [m for m in msgs if str(getattr(m, "role", "")).lower() == "system"]
+            non_sys_m = [
+                m for m in msgs if str(getattr(m, "role", "")).lower() != "system"
+            ]
+            if len(non_sys_m) > 6 and hasattr(c_ctx, "messages") and isinstance(c_ctx.messages, list):
+                c_ctx.messages = sys_m + non_sys_m[-6:]
+
+    def _record_agent_response(agent_name_hint: str = "Krishi Mitra"):
+        active_agent = getattr(session, "agent", None)
+        active_name = (
+            "Fasal Doctor"
+            if active_agent and "Specialist" in type(active_agent).__name__
+            else agent_name_hint
+        )
+        db.log_agent_response(agent_name=active_name, status="SUCCESS")
+        try:
+            import api_server
+
+            api_server.broadcast_event_sync(
+                "agent_response", {"agent": active_name, "status": "SUCCESS"}
+            )
+        except Exception:
+            pass
+
+    @session.on("agent_speech_committed")
+    def _on_agent_speech_committed(ev):
+        _record_agent_response()
+
+    @session.on("speech_committed")
+    def _on_speech_committed(ev):
+        _record_agent_response()
+
+    @session.on("agent_speech_started")
+    def _on_agent_speech_started(ev):
+        _record_agent_response()
 
     profile = db.get_farmer_profile(user_id)
     lang_pref = (
@@ -1014,6 +1114,7 @@ async def my_agent(ctx: JobContext):
         },
         ensure_ascii=False,
     )
+    _record_agent_response("Krishi Mitra")
     await session.say(greeting_json)
 
 

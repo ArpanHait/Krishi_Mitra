@@ -39,7 +39,7 @@ async def fetch_district_weather(district_name: str, state: str = "West Bengal")
     today_str = datetime.date.today().strftime("%d %B %Y")
 
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=0.6) as client:
             # 1. Geocoding request
             geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={district_clean}&count=1"
             geo_resp = await client.get(geo_url)
@@ -80,6 +80,13 @@ async def fetch_district_weather(district_name: str, state: str = "West Bengal")
             min_temp = min_temps[0] if min_temps else "N/A"
             rain_mm = precip[0] if precip else 0.0
 
+            db.log_tool_call("weather", "SUCCESS")
+            try:
+                import api_server
+                api_server.broadcast_event_sync("tool_called", {"tool": "weather", "status": "SUCCESS"})
+            except Exception:
+                pass
+
             return (
                 f"As per today's live weather report ({today_str}) for {resolved_name}, {state_clean}: "
                 f"Current temperature is {curr_temp}°C (Min: {min_temp}°C, Max: {max_temp}°C). "
@@ -88,103 +95,134 @@ async def fetch_district_weather(district_name: str, state: str = "West Bengal")
 
     except Exception as e:
         logger.error(f"Error fetching district weather for {district_clean}: {e}")
+        db.log_tool_call("weather", "FAILED", error_message=str(e))
+        try:
+            import api_server
+            api_server.broadcast_event_sync("tool_called", {"tool": "weather", "status": "FAILED"})
+        except Exception:
+            pass
         return "Unable to fetch live weather data at this moment. Please check again shortly."
 
 
 async def fetch_mandi_prices(
-    commodity: str, district: str = "Burdwan", state: str = "West Bengal"
+    commodity: str, district: str = "", state: str = "West Bengal"
 ) -> str:
-    """Fetch real-time mandi prices via Government Agmarknet (data.gov.in) with strict 3.0s timeout and benchmark fallback."""
+    """Fetch real-time mandi prices via Government Agmarknet (data.gov.in) with strict timeout and benchmark fallback."""
     commodity_clean = commodity.strip()
-    district_clean = district.strip()
+    district_clean = district.strip() if district and district.strip() else "Local"
     state_clean = state.strip() if state else "West Bengal"
     today_str = datetime.date.today().strftime("%d %B %Y")
 
-    api_key = os.getenv("DATA_GOV_API_KEY", "").strip()
+    try:
+        api_key = os.getenv("DATA_GOV_API_KEY", "").strip()
 
-    # Attempt Primary Live Gov API call with strict 3.0s timeout
-    if api_key:
-        try:
-            async with httpx.AsyncClient(timeout=3.0) as client:
-                gov_url = "https://api.data.gov.in/resource/9ef0be31-5971-4be1-8511-50e207d76d56"
-                params = {
-                    "api-key": api_key,
-                    "format": "json",
-                    "filters[state]": state_clean,
-                    "filters[district]": district_clean,
-                    "filters[commodity]": commodity_clean,
-                }
-                resp = await client.get(gov_url, params=params)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    records = data.get("records", [])
-                    if records:
-                        rec = records[0]
-                        market_name = rec.get("market", f"{district_clean} Mandi")
-                        comm_name = rec.get("commodity", commodity_clean)
-                        modal_price = rec.get(
-                            "modal_price", rec.get("modal_rate", "N/A")
-                        )
-                        min_price = rec.get("min_price", rec.get("min_rate", "N/A"))
-                        max_price = rec.get("max_price", rec.get("max_rate", "N/A"))
-                        report_date = rec.get("arrival_date", today_str)
+        # Attempt Primary Live Gov API call with strict 1.0s timeout for instant voice responsiveness
+        if api_key:
+            try:
+                async with httpx.AsyncClient(timeout=0.5) as client:
+                    gov_url = "https://api.data.gov.in/resource/9ef0be31-5971-4be1-8511-50e207d76d56"
+                    params = {
+                        "api-key": api_key,
+                        "format": "json",
+                        "filters[state]": state_clean,
+                        "filters[district]": district_clean,
+                        "filters[commodity]": commodity_clean,
+                    }
+                    resp = await client.get(gov_url, params=params)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        records = data.get("records", [])
+                        if records:
+                            rec = records[0]
+                            market_name = rec.get("market", f"{district_clean} Mandi")
+                            comm_name = rec.get("commodity", commodity_clean)
+                            modal_price = rec.get(
+                                "modal_price", rec.get("modal_rate", "N/A")
+                            )
+                            min_price = rec.get("min_price", rec.get("min_rate", "N/A"))
+                            max_price = rec.get("max_price", rec.get("max_rate", "N/A"))
+                            report_date = rec.get("arrival_date", today_str)
 
-                        return (
-                            f"As per today's live Agmarknet report ({report_date}) for {comm_name} in {market_name}, {district_clean} ({state_clean}): "
-                            f"Modal price is ₹{modal_price}/quintal (Min: ₹{min_price}, Max: ₹{max_price}). "
-                            f"Rates can vary locally; please verify at your local market before selling."
-                        )
-        except Exception as e:
-            logger.warning(
-                f"Agmarknet Live API request failed/timed out: {e}. Falling back to benchmark rates."
-            )
+                            db.log_tool_call("mandi", "SUCCESS")
+                            try:
+                                import api_server
+                                api_server.broadcast_event_sync("tool_called", {"tool": "mandi", "status": "SUCCESS"})
+                            except Exception:
+                                pass
 
-    # Local Fallback Strategy (mandi_rates.json)
-    fallback_data = _load_fallback_mandi_rates()
-    state_key = state_clean.lower().replace(" ", "_")
-    dist_key = district_clean.lower().replace(" ", "_")
-    comm_key = commodity_clean.lower().replace(" ", "_")
+                            return (
+                                f"As per today's live Agmarknet report ({report_date}) for {comm_name} in {market_name}, {district_clean} ({state_clean}): "
+                                f"Modal price is ₹{modal_price}/quintal (Min: ₹{min_price}, Max: ₹{max_price}). "
+                                f"Rates can vary locally; please verify at your local market before selling."
+                            )
+            except Exception as e:
+                logger.warning(
+                    f"Agmarknet Live API request failed/timed out: {e}. Falling back to benchmark rates."
+                )
 
-    rate_info = None
+        # Local Fallback Strategy (mandi_rates.json)
+        fallback_data = _load_fallback_mandi_rates()
+        state_key = state_clean.lower().replace(" ", "_")
+        dist_key = district_clean.lower().replace(" ", "_")
+        comm_key = commodity_clean.lower().replace(" ", "_")
 
-    # Search in state -> district -> commodity
-    state_dict = fallback_data.get(state_key, {})
-    dist_dict = state_dict.get(dist_key, {})
+        rate_info = None
 
-    # Check exact commodity key or substring match
-    for k, v in dist_dict.items():
-        if k in comm_key or comm_key in k:
-            rate_info = v
-            break
+        # Search in state -> district -> commodity
+        state_dict = fallback_data.get(state_key, {})
+        dist_dict = state_dict.get(dist_key, {})
 
-    # If not found in district, check default benchmarks
-    if not rate_info:
-        def_benchmarks = fallback_data.get("default_benchmarks", {})
-        for k, v in def_benchmarks.items():
+        # Check exact commodity key or substring match
+        for k, v in dist_dict.items():
             if k in comm_key or comm_key in k:
                 rate_info = v
                 break
 
-    # General fallback default if commodity unknown
-    if not rate_info:
-        rate_info = {
-            "min_price": 2000,
-            "max_price": 2400,
-            "modal_price": 2200,
-            "market": f"{district_clean} Mandi",
-            "unit": "Quintal",
-        }
+        # If not found in district, check default benchmarks
+        if not rate_info:
+            def_benchmarks = fallback_data.get("default_benchmarks", {})
+            for k, v in def_benchmarks.items():
+                if k in comm_key or comm_key in k:
+                    rate_info = v
+                    break
 
-    modal_price = rate_info.get("modal_price", 2200)
-    min_price = rate_info.get("min_price", 2000)
-    max_price = rate_info.get("max_price", 2400)
-    market_name = rate_info.get("market", f"{district_clean} Mandi")
+        # General fallback default if commodity unknown
+        if not rate_info:
+            rate_info = {
+                "min_price": 2000,
+                "max_price": 2400,
+                "modal_price": 2200,
+                "market": f"{district_clean} Mandi",
+                "unit": "Quintal",
+            }
 
-    return (
-        f"According to recent market benchmark report ({today_str}) for {commodity_clean} in {district_clean} ({state_clean}): "
-        f"Modal price is ₹{modal_price}/quintal (Min: ₹{min_price}, Max: ₹{max_price}) at {market_name}. "
-        f"Rates can vary locally; please verify at your local market before selling."
-    )
+        modal_price = rate_info.get("modal_price", 2200)
+        min_price = rate_info.get("min_price", 2000)
+        max_price = rate_info.get("max_price", 2400)
+        market_name = f"{district_clean} Mandi" if district_clean else rate_info.get("market", "Local Mandi")
+
+        db.log_tool_call("mandi", "SUCCESS")
+        try:
+            import api_server
+            api_server.broadcast_event_sync("tool_called", {"tool": "mandi", "status": "SUCCESS"})
+        except Exception:
+            pass
+
+        return (
+            f"According to recent market benchmark report ({today_str}) for {commodity_clean} in {district_clean} ({state_clean}): "
+            f"Modal price is ₹{modal_price}/quintal (Min: ₹{min_price}, Max: ₹{max_price}) at {market_name}. "
+            f"Rates can vary locally; please verify at your local market before selling."
+        )
+
+    except Exception as e:
+        logger.error(f"Error fetching mandi prices for {commodity_clean}: {e}")
+        db.log_tool_call("mandi", "FAILED", error_message=str(e))
+        try:
+            import api_server
+            api_server.broadcast_event_sync("tool_called", {"tool": "mandi", "status": "FAILED"})
+        except Exception:
+            pass
+        return "Unable to fetch mandi rates at this moment. Please check with your local mandi market."
 
 
 def extract_commodity_from_topic(topic: str) -> str:
@@ -671,44 +709,52 @@ async def create_escalation(
 ) -> str:
     """Creates an escalation request. Checks for open duplicates first.
 
-    Redacts sensitive info, saves to SQLite database, dispatches an email, and returns the Ticket ID.
+    Redacts sensitive info, saves to SQLite database, dispatches an email asynchronously, and returns the Ticket ID instantly.
     """
     clean_summary = sanitize_summary(summary)
     urgency_norm = urgency.strip().capitalize() if urgency else "Medium"
     if urgency_norm not in ("Low", "Medium", "High", "Emergency"):
         urgency_norm = "Medium"
 
-    # Check for existing OPEN duplicate ticket for the same farmer and topic
-    existing_ticket = db.get_open_duplicate_escalation(
-        farmer_name, topic, db_path=db.DB_PATH
-    )
-
-    if existing_ticket:
-        ticket_id = existing_ticket["ticket_id"]
-        existing_summary = existing_ticket.get("summary") or ""
-        updated_summary = f"{existing_summary}\n\n[UPDATE]: {clean_summary}".strip()
-        db.update_escalation_summary_and_urgency(
-            ticket_id, updated_summary, urgency_norm, db_path=db.DB_PATH
-        )
-        send_email_alert(
-            ticket_id, farmer_name, f"{topic} (UPDATED)", urgency_norm, updated_summary
-        )
-        return f"Existing open ticket #{ticket_id} updated with new details."
-
-    # Create new ticket
     ticket_id = f"KM-{uuid.uuid4().hex[:6].upper()}"
-    db.create_escalation_record(
-        ticket_id=ticket_id,
-        farmer_name=farmer_name,
-        topic=topic,
-        summary=clean_summary,
-        urgency=urgency_norm,
-        language=language,
-        preferred_followup=preferred_followup,
-        db_path=db.DB_PATH,
-    )
 
-    # Send Email Alert to Human Officer
-    send_email_alert(ticket_id, farmer_name, topic, urgency_norm, clean_summary)
+    def _bg_ticket_task():
+        # Check duplicate
+        existing_ticket = db.get_open_duplicate_escalation(
+            farmer_name, topic, db_path=db.DB_PATH
+        )
+        if existing_ticket:
+            t_id = existing_ticket["ticket_id"]
+            existing_summary = existing_ticket.get("summary") or ""
+            updated_summary = f"{existing_summary}\n\n[UPDATE]: {clean_summary}".strip()
+            db.update_escalation_summary_and_urgency(
+                t_id, updated_summary, urgency_norm, db_path=db.DB_PATH
+            )
+            send_email_alert(
+                t_id, farmer_name, f"{topic} (UPDATED)", urgency_norm, updated_summary
+            )
+        else:
+            db.create_escalation_record(
+                ticket_id=ticket_id,
+                farmer_name=farmer_name,
+                topic=topic,
+                summary=clean_summary,
+                urgency=urgency_norm,
+                language=language,
+                preferred_followup=preferred_followup,
+                db_path=db.DB_PATH,
+            )
+            send_email_alert(ticket_id, farmer_name, topic, urgency_norm, clean_summary)
+
+        try:
+            import api_server
+
+            api_server.broadcast_event_sync("ticket_updated", {"ticket_id": ticket_id})
+        except Exception:
+            pass
+
+    # Launch background task so tool returns INSTANTLY (<2ms)
+    _t = asyncio.create_task(asyncio.to_thread(_bg_ticket_task))
+    _ = _t
 
     return f"Ticket created successfully under ID: #{ticket_id}"
