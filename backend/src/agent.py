@@ -6,6 +6,7 @@ import time
 from collections.abc import AsyncIterable
 
 from dotenv import load_dotenv
+from google.genai import types
 from livekit import rtc
 from livekit.agents import (
     Agent,
@@ -914,6 +915,8 @@ async def my_agent(ctx: JobContext):
         ),
         llm=google.LLM(
             model="gemini-3.1-flash-lite",
+            temperature=0.2,
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
         ),
         tts=murf.TTS(
             voice="Anisha",
@@ -1040,11 +1043,16 @@ async def my_agent(ctx: JobContext):
 
     def _record_agent_response(agent_name_hint: str = "Krishi Mitra"):
         active_agent = getattr(session, "agent", None)
-        active_name = (
-            "Fasal Doctor"
-            if active_agent and "Specialist" in type(active_agent).__name__
-            else agent_name_hint
-        )
+        inst_text = str(getattr(active_agent, "instructions", ""))
+        cls_name = type(active_agent).__name__ if active_agent else ""
+        if (
+            "Fasal Doctor" in inst_text
+            or "Specialist" in cls_name
+            or "CropSpecialist" in cls_name
+        ):
+            active_name = "Fasal Doctor"
+        else:
+            active_name = agent_name_hint
         db.log_agent_response(agent_name=active_name, status="SUCCESS")
         try:
             import api_server

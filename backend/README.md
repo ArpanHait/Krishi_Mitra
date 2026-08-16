@@ -214,16 +214,25 @@ docker run --env-file .env.local murf-voice-agent
 ```
 backend/
 ├── src/
-│   ├── agent.py           # Agent entrypoint — pipeline, prompt, config
-│   ├── tools.py           # Tools: Weather, Mandi, Call Scheduling, Gist Extraction
-│   ├── db.py              # SQLite farmer profile memory
-│   ├── outbound_dialer.py # Twilio outbound call poller & dialer (Day 6)
+│   ├── agent.py           # Entrypoint — Voice pipeline, system prompt & Krishi Mitra agent
+│   ├── specialist.py      # Crop Problem Specialist Agent (Fasal Doctor - Samar Voice)
+│   ├── tools.py           # Tools: Weather, Mandi, Scheduling & Escalation tools
+│   ├── db.py              # SQLite WAL mode profile, escalations & call analytics storage
+│   ├── api_server.py      # REST API server, SSE broadcast & Twilio Webhook handler
+│   ├── email_dispatcher.py# Government officer HTML email dispatcher
+│   ├── email_listener.py  # IMAP officer reply synchronization worker
+│   ├── outbound_dialer.py # Twilio outbound call poller & status callback
 │   └── mandi_rates.json   # Benchmark market fallback rates
 ├── tests/
 │   ├── test_agent.py               # LLM-judged agent behaviour evals
 │   ├── test_day5_tools.py          # Weather & Mandi tool unit tests
-│   ├── test_day6_telephony.py      # Outbound call & confirmation tests (Day 6)
-│   ├── test_memory.py              # SQLite memory & topic gist tests (Day 6)
+│   ├── test_day6_telephony.py      # Outbound call & confirmation tests
+│   ├── test_day7_escalation.py     # Government escalation ticket tests
+│   ├── test_day7_email_sync.py     # Officer email reply sync tests
+│   ├── test_day8_analytics.py      # Call outcome analytics unit tests
+│   ├── test_day9_handoff.py        # Two-Way agent handoff unit tests
+│   ├── test_day10_live_metrics_sse.py # SSE & live metrics tests
+│   ├── test_memory.py              # SQLite memory & topic gist tests
 │   └── test_full_memory_flow.py    # End-to-end profile persistence test
 ├── .env.example           # Environment variable template
 ├── pyproject.toml         # Python dependencies (uv)

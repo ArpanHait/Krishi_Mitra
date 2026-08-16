@@ -6,8 +6,6 @@
 cd backend
 $env:PATH += ";$env:USERPROFILE\.local\bin"
 uv run python src/agent.py dev
-
-
 ```
 
 ---

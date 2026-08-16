@@ -15,9 +15,22 @@
 # -----------------------------------------------------------------------------
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 krishi_memory.db
+
+# -----------------------------------------------------------------------------
+# Error Logs, Diagnostic Files & Temporary Docs
+# -----------------------------------------------------------------------------
+currentERROR.*
+*.log
+RUN_COMMANDS.md
+FRONTEND_DEMO.HTML
+scratch/
+KMS/
+.system_generated/
 
 # -----------------------------------------------------------------------------
 # Python Virtual Environments & Build Caches
@@ -40,6 +53,7 @@ build/
 node_modules/
 .next/
 out/
+.vercel/
 /.pnp
 .pnp.*
 npm-debug.log*
@@ -47,14 +61,6 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 *.tsbuildinfo
-
-# -----------------------------------------------------------------------------
-# Temporary & Local Development Files
-# -----------------------------------------------------------------------------
-RUN_COMMANDS.md
-FRONTEND_DEMO.HTML
-scratch/
-KMS/
 
 # -----------------------------------------------------------------------------
 # OS & IDE Configuration Files

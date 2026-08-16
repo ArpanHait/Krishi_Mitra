@@ -13,5 +13,10 @@ KMS/
 .ruff_cache/
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
 *.sqlite3
 krishi_memory.db
+currentERROR.*
+*.log
+scratch/

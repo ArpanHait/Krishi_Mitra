@@ -17,13 +17,13 @@ const MotionMicErrorCard = motion.create(MicErrorCard);
 
 const VIEW_MOTION_PROPS = {
   variants: {
-    visible: { opacity: 1 },
-    hidden: { opacity: 0 },
+    visible: { opacity: 1, scale: 1, y: 0 },
+    hidden: { opacity: 0, scale: 0.98, y: 6 },
   },
   initial: 'hidden',
   animate: 'visible',
   exit: 'hidden',
-  transition: { duration: 0.4, ease: 'linear' },
+  transition: { duration: 0.35, ease: [0.16, 1, 0.3, 1] },
 };
 
 // ─── Call Ended Screen ───
