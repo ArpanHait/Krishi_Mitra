@@ -209,6 +209,16 @@ flowchart LR
   5. `test_specialist_responds_in_hindi_when_prompted_in_hindi`
 - **42 / 42 backend pytest cases passed (100%)**.
 
+
+### 🔹 Day 10: Sharing Voice Agent Journey
+
+Check out the post:
+
+[![From Prompts to Conversations: Building a Real-Time Voice AI Agent](./preview.png)](https://dev.to/arpanhait/from-prompts-to-conversations-building-a-real-time-voice-ai-agent-305o)
+
+📖 **Read the full article on Dev.to**:  
+👉 **[From Prompts to Conversations: Building a Real-Time Voice AI Agent](https://dev.to/arpanhait/from-prompts-to-conversations-building-a-real-time-voice-ai-agent-305o)**
+
 ---
 
 ## 🛠️ Tech Stack

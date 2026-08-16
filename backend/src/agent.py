@@ -414,16 +414,27 @@ class Assistant(Agent):
     async def on_enter(self) -> None:
         """Invoked when Krishi Mitra active agent starts or resumes control."""
         logger.info("Active agent: KrishiMitra (Anisha Voice).")
-        import asyncio
+        # Only trigger auto-reply on handoff back from specialist (when prior messages exist),
+        # NOT on initial cold start (where my_agent already handles the personalized greeting).
+        msgs = (
+            self.chat_ctx.messages()
+            if callable(getattr(self.chat_ctx, "messages", None))
+            else getattr(self.chat_ctx, "messages", [])
+        )
+        non_system_msgs = [
+            m for m in msgs if str(getattr(m, "role", "")).lower() != "system"
+        ]
+        if len(non_system_msgs) > 0:
+            import asyncio
 
-        async def _trigger_reply():
-            await asyncio.sleep(0.15)
-            sess = getattr(self, "session", None)
-            if sess:
-                await sess.generate_reply()
+            async def _trigger_reply():
+                await asyncio.sleep(0.15)
+                sess = getattr(self, "session", None)
+                if sess:
+                    await sess.generate_reply()
 
-        _task = asyncio.create_task(_trigger_reply())
-        _ = _task
+            _task = asyncio.create_task(_trigger_reply())
+            _ = _task
 
     @function_tool
     async def transfer_to_crop_specialist(
