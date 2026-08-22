@@ -61,9 +61,9 @@ export function Fade({ top = false, bottom = false, className }: FadeProps) {
   return (
     <div
       className={cn(
-        'from-background pointer-events-none h-4 bg-linear-to-b to-transparent',
-        top && 'bg-linear-to-b',
-        bottom && 'bg-linear-to-t',
+        'pointer-events-none h-6 bg-gradient-to-b from-[#0e2a1e] to-transparent',
+        top && 'bg-gradient-to-b from-[#0e2a1e] to-transparent',
+        bottom && 'bg-gradient-to-t from-[#0e2a1e] to-transparent',
         className
       )}
     />
@@ -282,8 +282,8 @@ export function AgentSessionView_01({
         <StatePill agentState={agentState} chatOpen={chatOpen} />
       )}
 
-      {/* ─── Fade from top edge ─── */}
-      <Fade top className="absolute inset-x-4 top-0 z-10 h-32" />
+      {/* ─── Fade from top edge (full width inset-x-0) ─── */}
+      <Fade top className="absolute inset-x-0 top-0 z-10 h-32" />
 
       {/* ─── Chat transcript (Foreground Layer z-[100]) ─── */}
       <div className="absolute top-0 bottom-[135px] z-[100] flex w-full flex-col md:bottom-[170px]">
@@ -322,23 +322,32 @@ export function AgentSessionView_01({
         {...BOTTOM_VIEW_MOTION_PROPS}
         className="absolute inset-x-3 bottom-0 z-50 md:inset-x-12"
       >
-        {/* Status shimmer text */}
+        {/* Status shimmer text in a sleek glassmorphic pill */}
         {isPreConnectBufferEnabled && (
           <AnimatePresence>
-            <MotionMessage
+            <motion.div
               key={dynamicStatusText}
-              duration={2}
-              {...SHIMMER_MOTION_PROPS}
-              className="pointer-events-none mx-auto block w-full max-w-2xl pb-3 text-center text-xs font-semibold text-[#95d5b2]"
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.25 }}
+              className="pointer-events-none mb-3 flex w-full justify-center"
             >
-              {dynamicStatusText}
-            </MotionMessage>
+              <div className="inline-flex items-center gap-2 rounded-full border border-[#52b788]/25 bg-[#0e2a1e]/85 px-4 py-1.5 shadow-lg backdrop-blur-md">
+                <MotionMessage
+                  duration={2}
+                  {...SHIMMER_MOTION_PROPS}
+                  className="text-center text-xs font-semibold text-[#95d5b2]"
+                >
+                  {dynamicStatusText}
+                </MotionMessage>
+              </div>
+            </motion.div>
           </AnimatePresence>
         )}
 
         {/* Control bar */}
         <div className="relative mx-auto max-w-2xl pb-3 md:pb-10">
-          <Fade bottom className="absolute inset-x-0 top-0 h-4 -translate-y-full" />
           <AgentControlBar
             variant="livekit"
             controls={controls}

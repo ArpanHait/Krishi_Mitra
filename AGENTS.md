@@ -130,3 +130,15 @@ Edit `frontend/app-config.ts` — company name, page title, logo paths, accent c
 
 ## Customization Rules & Directives
 - **Always present proposed thoughts and implementation plan**: Before making code edits or executing steps, always outline the thoughts, analysis, and step-by-step plan to the user.
+- **120 FPS UI Animation Standard**: Always target **120 FPS** high-refresh-rate GPU hardware acceleration (`transform-gpu`, `will-change-[opacity,transform]`) for frontend UI transitions and visual components.
+- **Page Transition Isolation**: Always use `mode="wait"` on Framer Motion `<AnimatePresence>` to prevent full-height (`min-h-svh`) layout stacking, scrollbar popping, and vertical reflow during screen transitions.
+- **Context Management & Token-Lean Protocol**:
+  - **Artifact-First Offloading**: Offload long logs, detailed plans, architecture analyses, and code diffs to Markdown artifacts (`implementation_plan.md`, `walkthrough.md`) to prevent context window bloat.
+  - **Token-Lean Communication**: Keep chat responses short, precise, and direct with clickable markdown links (`[filename](file:///path/to/file)`). Avoid re-summarizing artifact contents in chat messages.
+  - **Silent Command Execution**: Inspect background process outputs silently and synthesize exact findings cleanly without outputting raw log dumps into chat.
+- **Core Engine & LLM Constraints**:
+  - **Model**: Must strictly maintain `gemini-3.1-flash-lite` across all voice agents (`Krishi Mitra` and `Fasal Doctor`).
+  - **Zero Thinking Budget**: `google.LLM` MUST be instantiated with `thinking_config=types.ThinkingConfig(thinking_budget=0)` to prevent Gemini 3.1 `504 DEADLINE_EXCEEDED` timeouts.
+  - **Non-Preemptive Generation**: Maintain `preemptive_generation=False` on `AgentSession` setup.
+  - **Zero Mock Baseline**: SQLite DB (`db.py`) metric counters start at 0 baseline seed data and increment strictly on authentic events.
+  - **Script Matching**: Enforce 100% strict language script matching (English/Latin $\rightarrow$ pure English, Hindi/Devanagari $\rightarrow$ Devanagari Hindi, Bengali $\rightarrow$ Bengali).

@@ -15,6 +15,7 @@ const MotionWelcomeView = motion.create(WelcomeView);
 const MotionSessionView = motion.create(AgentSessionView_01);
 const MotionMicErrorCard = motion.create(MicErrorCard);
 
+// 🛠️ CUSTOMIZABLE: Standard transition animation props for session and welcome views.
 const VIEW_MOTION_PROPS = {
   variants: {
     visible: { opacity: 1, scale: 1, y: 0 },
@@ -23,13 +24,27 @@ const VIEW_MOTION_PROPS = {
   initial: 'hidden',
   animate: 'visible',
   exit: 'hidden',
-  transition: { duration: 0.35, ease: [0.16, 1, 0.3, 1] },
+  transition: { duration: 0.28, ease: [0.16, 1, 0.3, 1] },
+};
+
+// 🛠️ CUSTOMIZABLE: Transition animation props for the "Call Ended" → Landing page transition (120 FPS Target).
+// You can edit 'duration' (e.g., 0.45 = 450ms), 'scale', or 'ease' below to customize transition smoothness.
+const CALL_ENDED_MOTION_PROPS = {
+  variants: {
+    visible: { opacity: 1, scale: 1, y: 0 },
+    hidden: { opacity: 0, scale: 0.99, y: 0 },
+  },
+  initial: 'hidden',
+  animate: 'visible',
+  exit: 'hidden',
+  transition: { duration: 0.45, ease: [0.25, 1, 0.5, 1] },
+  // Change duration (0.45 = 450ms)
 };
 
 // ─── Call Ended Screen ───
 function CallEndedView({ onNewCall }: { onNewCall: () => void }) {
   return (
-    <div className="relative flex min-h-svh w-full flex-col items-center justify-center overflow-hidden">
+    <div className="relative flex min-h-svh w-full transform-gpu flex-col items-center justify-center overflow-hidden will-change-[opacity,transform]">
       {/* Background matching session view */}
       <div
         className="absolute inset-0"
@@ -122,7 +137,8 @@ export function ViewController({ appConfig }: ViewControllerProps) {
 
   const hasEnded = wasConnected && !isConnected;
 
-  // Auto-redirect from Call Ended back to Landing page after 3 seconds
+  // 🛠️ CUSTOMIZABLE: Auto-redirect delay (in ms, default: 3000ms = 3 seconds) from Call Ended back to Landing page.
+  // Change 3000 to your preferred delay (e.g. 4000 = 4 sec, 2000 = 2 sec).
   useEffect(() => {
     if (hasEnded) {
       const timer = setTimeout(() => {
@@ -141,15 +157,20 @@ export function ViewController({ appConfig }: ViewControllerProps) {
   return (
     <>
       <AppHeader hidden={isConnected} />
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {/* ─── Microphone permission error ─── */}
         {hasMicError && (
           <MotionMicErrorCard key="mic-error" {...VIEW_MOTION_PROPS} onRetry={handleStartCall} />
         )}
 
-        {/* ─── Call ended screen ─── */}
+        {/* ─── Call ended screen (120 FPS ultra-smooth fade exit) ─── */}
+        {/* 🛠️ CUSTOMIZABLE: Edit CALL_ENDED_MOTION_PROPS at top of file to change fade speed/easing */}
         {!isConnected && hasEnded && !hasMicError && (
-          <motion.div key="call-ended" className="min-h-svh w-full" {...VIEW_MOTION_PROPS}>
+          <motion.div
+            key="call-ended"
+            className="min-h-svh w-full transform-gpu will-change-[opacity,transform]"
+            {...CALL_ENDED_MOTION_PROPS}
+          >
             <CallEndedView onNewCall={handleStartCall} />
           </motion.div>
         )}
