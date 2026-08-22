@@ -1,7 +1,7 @@
 # =============================================================================
 # Git Ignore Rules — Krishi Mitra Voice Assistant Repository
 # =============================================================================
-AGENTS.md
+
 # -----------------------------------------------------------------------------
 # Environment & Secret Files (CRITICAL - DO NOT COMMIT SECRETS)
 # -----------------------------------------------------------------------------
@@ -24,7 +24,10 @@ krishi_memory.db
 # -----------------------------------------------------------------------------
 # Error Logs, Diagnostic Files & Temporary Docs
 # -----------------------------------------------------------------------------
+AGENTS.md
+CONTEXT.md
 currentERROR.*
+currentERROR.txt
 *.log
 RUN_COMMANDS.md
 FRONTEND_DEMO.HTML
