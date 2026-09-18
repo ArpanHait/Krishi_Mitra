@@ -822,7 +822,11 @@ class Assistant(Agent):
             yield item
 
 
-server = AgentServer()
+server = AgentServer(
+    port=0,  # Disables internal port 8081 so Render routes exclusively to Port 10000 ($PORT)
+    num_idle_processes=0,  # Prevents idle process timeout & saves CPU on Free Tier
+)
+
 
 
 def prewarm(proc: JobProcess):
