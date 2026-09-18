@@ -1,5 +1,6 @@
 import datetime
 import logging
+import os
 import sqlite3
 import time
 import uuid
@@ -1052,3 +1053,52 @@ def clear_all_call_logs(db_path: Path | str | None = None) -> int:
         conn.commit()
     logger.info(f"[Call Analytics]: Cleared all {deleted_count} call log records.")
     return deleted_count
+
+
+_supabase_client = None
+
+
+def get_supabase_client():
+    """Retrieve or initialize singleton Supabase Cloud client."""
+    global _supabase_client
+    if _supabase_client is None:
+        url = os.getenv("SUPABASE_URL")
+        key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        if url and key:
+            try:
+                from supabase import create_client
+
+                _supabase_client = create_client(url, key)
+            except Exception as e:
+                logger.warning(f"Could not initialize Supabase client: {e}")
+    return _supabase_client
+
+
+def check_database_health() -> dict[str, Any]:
+    """Check database connectivity and ping Supabase to keep free-tier instance active."""
+    health: dict[str, Any] = {
+        "sqlite": "ok",
+        "supabase": "not_configured",
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }
+
+    # 1. Test local SQLite
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT 1")
+            cur.fetchone()
+    except Exception as e:
+        health["sqlite"] = f"error: {e}"
+
+    # 2. Test Supabase Cloud (executes lightweight ping to keep free-tier project active)
+    sb = get_supabase_client()
+    if sb:
+        try:
+            sb.table("farmer_profiles").select("user_id").limit(1).execute()
+            health["supabase"] = "connected"
+        except Exception as e:
+            health["supabase"] = f"error: {e}"
+
+    return health
+

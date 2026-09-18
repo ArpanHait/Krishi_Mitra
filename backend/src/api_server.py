@@ -5,12 +5,14 @@ import json
 import logging
 import multiprocessing
 import threading
+import time
 
 from aiohttp import web
 
 import db
 
 logger = logging.getLogger("api_server")
+START_TIME = time.time()
 
 _sse_clients: set[asyncio.Queue] = set()
 _server_loop: asyncio.AbstractEventLoop | None = None
@@ -286,9 +288,37 @@ async def handle_twilio_status(request):
         return web.Response(text="<Response/>", content_type="text/xml")
 
 
+async def handle_health(request):
+    """Health check endpoint for UptimeRobot, load balancers, and monitoring.
+    Pings both local SQLite and Cloud Supabase PostgreSQL to keep free-tier instances active.
+    """
+    try:
+        db_health = db.check_database_health()
+        uptime = round(time.time() - START_TIME, 1)
+        is_healthy = db_health.get("sqlite") == "ok" and "error" not in str(
+            db_health.get("supabase", "")
+        )
+        status_code = 200 if is_healthy else 500
+        return json_response(
+            {
+                "status": "healthy" if is_healthy else "degraded",
+                "service": "Krishi Mitra Voice Assistant Backend",
+                "uptime_seconds": uptime,
+                "database": db_health,
+            },
+            status=status_code,
+        )
+    except Exception as e:
+        logger.error(f"Error in GET /health: {e}")
+        return json_response({"status": "error", "message": str(e)}, status=500)
+
+
 def create_app():
     app = web.Application()
     app.router.add_options("/{tail:.*}", handle_options)
+    app.router.add_get("/", handle_health)
+    app.router.add_get("/health", handle_health)
+    app.router.add_get("/api/health", handle_health)
     app.router.add_get("/api/events", handle_sse)
     app.router.add_get("/api/escalations", handle_get_escalations)
     app.router.add_get("/api/escalations/pending-count", handle_get_pending_count)
@@ -303,8 +333,10 @@ def create_app():
     return app
 
 
-def start_api_server_thread(host: str = "0.0.0.0", port: int = 8080) -> None:
+
+def start_api_server_thread(host: str = "0.0.0.0", port: int | None = None) -> None:
     """Starts the aiohttp REST API server in a background daemon thread."""
+    actual_port = port or int(os.getenv("PORT", 8080))
 
     def _run():
         global _server_loop
@@ -315,17 +347,17 @@ def start_api_server_thread(host: str = "0.0.0.0", port: int = 8080) -> None:
         runner = web.AppRunner(app)
         loop.run_until_complete(runner.setup())
         try:
-            site = web.TCPSite(runner, host, port)
+            site = web.TCPSite(runner, host, actual_port)
             loop.run_until_complete(site.start())
             print(
-                f"🌐 [REST API Server]: Listening for HTTP requests at http://{host}:{port}",
+                f"🌐 [REST API Server]: Listening for HTTP requests at http://{host}:{actual_port}",
                 flush=True,
             )
-            logger.info(f"REST API Server running at http://{host}:{port}")
+            logger.info(f"REST API Server running at http://{host}:{actual_port}")
             loop.run_forever()
         except OSError:
             print(
-                f"🌐 [REST API Server]: Port {port} is already active.",
+                f"🌐 [REST API Server]: Port {actual_port} is already active.",
                 flush=True,
             )
 
@@ -358,14 +390,16 @@ def _run_api_server_worker(host: str, port: int) -> None:
 
 
 def start_api_server_process(
-    host: str = "0.0.0.0", port: int = 8080
+    host: str = "0.0.0.0", port: int | None = None
 ) -> multiprocessing.Process:
     """Starts the aiohttp REST API server in an isolated background Process."""
+    actual_port = port or int(os.getenv("PORT", 8080))
     p = multiprocessing.Process(
         target=_run_api_server_worker,
-        args=(host, port),
+        args=(host, actual_port),
         daemon=True,
         name="api_server_process",
     )
     p.start()
     return p
+

@@ -76,3 +76,5 @@ Thumbs.db
 .codex/
 .gemini/
 .cursor/
+.agents/
+skills-lock.json

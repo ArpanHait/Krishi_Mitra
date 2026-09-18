@@ -1130,5 +1130,6 @@ if __name__ == "__main__":
     import api_server
 
     outbound_dialer.start_scheduled_call_poller()
-    api_server.start_api_server_process(port=8080)
+    api_server.start_api_server_process()
     cli.run_app(server)
+
