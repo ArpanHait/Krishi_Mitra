@@ -823,9 +823,12 @@ class Assistant(Agent):
 
 
 server = AgentServer(
-    port=0,  # Disables internal port 8081 so Render routes exclusively to Port 10000 ($PORT)
-    num_idle_processes=0,  # Prevents idle process timeout & saves CPU on Free Tier
+    num_idle_processes=1,  # Keep 1 warm worker process ready for incoming calls
+    load_threshold=float(
+        "inf"
+    ),  # Prevent premature worker draining during startup CPU spikes on Free Tier
 )
+
 
 
 
