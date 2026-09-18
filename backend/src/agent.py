@@ -1127,9 +1127,14 @@ async def my_agent(ctx: JobContext):
 
 
 if __name__ == "__main__":
-    import api_server
+    import sys
 
-    outbound_dialer.start_scheduled_call_poller()
-    api_server.start_api_server_process()
+    if "download-files" not in sys.argv:
+        import api_server
+
+        outbound_dialer.start_scheduled_call_poller()
+        api_server.start_api_server_process()
+
     cli.run_app(server)
+
 
