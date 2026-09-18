@@ -55,6 +55,11 @@ FROM base
 
 WORKDIR /app
 
+# Point PATH to the virtual environment and redirect any UV cache to /tmp
+ENV PATH="/app/.venv/bin:$PATH"
+ENV UV_CACHE_DIR="/tmp/.uv-cache"
+ENV UV_NO_CACHE=1
+
 # Create a non-privileged user that the app will run under.
 # See https://docs.docker.com/build/building/best-practices/#user
 ARG UID=10001
@@ -64,7 +69,9 @@ RUN adduser \
     --home "/app" \
     --shell "/sbin/nologin" \
     --uid "${UID}" \
-    appuser
+    appuser \
+  && mkdir -p /tmp/.uv-cache \
+  && chown -R appuser:appuser /tmp/.uv-cache
 
 # Copy the application and virtual environment with correct ownership in a single layer
 # This avoids expensive recursive chown and excludes build tools from the final image
@@ -74,9 +81,8 @@ COPY --from=build --chown=appuser:appuser /app /app
 # This improves security by not running as root
 USER appuser
 
-# Run the AgentServer using UV
-# UV will activate the virtual environment and run the agent.
-# The "start" command tells the AgentServer to connect to LiveKit and begin waiting for jobs.
-CMD ["uv", "run", "python", "src/agent.py", "start"]
+# Run the AgentServer directly using the pre-built virtual environment's Python
+CMD ["python", "src/agent.py", "start"]
+
 
 
