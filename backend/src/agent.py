@@ -23,7 +23,7 @@ from livekit.agents import (
     tokenize,
 )
 from livekit.plugins import deepgram, google, murf, noise_cancellation, silero
-from livekit.plugins.turn_detector.multilingual import MultilingualModel
+# from livekit.plugins.turn_detector.multilingual import MultilingualModel  # Uncomment if upgrading to >1GB RAM
 
 import db
 import outbound_dialer
@@ -924,7 +924,7 @@ async def my_agent(ctx: JobContext):
             tokenizer=tokenize.basic.SentenceTokenizer(),
             text_pacing=True,
         ),
-        turn_detection=MultilingualModel(),
+        # turn_detection=MultilingualModel(),  # Uncomment if upgrading to >1GB RAM
         vad=ctx.proc.userdata["vad"],
         preemptive_generation=False,
     )
@@ -1133,8 +1133,9 @@ if __name__ == "__main__":
         import api_server
 
         outbound_dialer.start_scheduled_call_poller()
-        api_server.start_api_server_process()
+        api_server.start_api_server_thread()
 
     cli.run_app(server)
+
 
 
